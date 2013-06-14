@@ -1,0 +1,11 @@
+In version 0.4 following improvements were implemented:
+- Fixed import of raw files (Version 3) from D8 Discover, now reading additional data start offset given in file
+- Included log area near the bottom of the window with possibility to hide
+- Changed file extension to pyw, so no console is opening during runtime (all errors are now displayed in log area)
+
+In version 0.3.2 following improvements were implemented:
+- Workaround for check of equal step widths before data merging, now assuming equal step width for deviations below 1e-7.
+- All checkboxes activated by default.
+
+In version 0.3.1 following improvements were implemented:
+- Opening and saving of multiple files.
