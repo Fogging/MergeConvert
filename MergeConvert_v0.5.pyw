@@ -5,7 +5,7 @@
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.4.
+# The present version is 0.5.
 
 import os, wx, sys
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
@@ -13,9 +13,10 @@ from wx.lib.mixins.listctrl import CheckListCtrlMixin
 import matplotlib
 matplotlib.use('WXAgg')
 from matplotlib.figure import Figure
+from matplotlib.widgets import RectangleSelector
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigCanvas, NavigationToolbar2WxAgg as NavigationToolbar
     
-from pylab import arange, argwhere, array, float_, float32, float64, fromfile, loadtxt, mod, pi, savetxt, sin, vstack, zeros
+from pylab import arange, argwhere, array, exp, float_, float32, float64, fromfile, loadtxt, log, mod, pi, savetxt, sin, vstack, zeros
 from StringIO import StringIO
 from time import gmtime, strftime
 from scipy.optimize import leastsq
@@ -421,7 +422,7 @@ class BarsFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_open_file, m_load)
         m_delete = menu_file.Append(-1, "&Datei entfernen...\tCtrl-L", "Bestehende Datei entfernen")
         self.Bind(wx.EVT_MENU, self.on_delete_file, m_delete)
-        m_color = menu_file.Append(-1, "&Farbe...\tCtrl-F", "Farbe wechseln")
+        m_color = menu_file.Append(-1, "&Farbe wechseln...\tCtrl-F", "Farbe wechseln")
         self.Bind(wx.EVT_MENU, self.on_color, m_color)
         m_merge = menu_file.Append(-1, "&Daten verbinden...\tCtrl-M", "Daten verbinden")
         self.Bind(wx.EVT_MENU, self.on_merge, m_merge)
@@ -457,19 +458,13 @@ class BarsFrame(wx.Frame):
         self.spWindow.SetMinimumPaneSize(100)
         self.spWindow.SplitHorizontally(self.panel, self.graphpanel, 150)
         
-
         # Create the mpl Figure and FigCanvas objects: 9x6 inches, 100 dots-per-inch
         self.dpi = 100
         self.fig = Figure((9, 6), dpi=self.dpi)
         self.canvas = FigCanvas(self.graphpanel, -1, self.fig)
         self.canvas.mpl_connect('motion_notify_event', self.on_UpdateCursor)
         self.canvas.mpl_connect('resize_event', self.on_Resize)
-        
-        # Create the navigation toolbar, tied to the canvas
-        self.toolbar = NavigationToolbar(self.canvas)
-        
-        self.bm_log = wx.Button(self.graphpanel, -1, "Log verbergen", size=(88,25))
-        self.bm_log.Bind(wx.EVT_BUTTON, self.on_hide_log)
+        self.canvas.mpl_connect('button_press_event', self.on_Press)
         
         self.log = wx.TextCtrl(self.graphpanel, -1, size=(666,66), style = wx.TE_MULTILINE|wx.TE_READONLY)
         self.log.SetFont(wx.Font(8, wx.MODERN, wx.NORMAL, wx.NORMAL, 0, "Sans"))
@@ -478,57 +473,53 @@ class BarsFrame(wx.Frame):
         sys.stderr = redir
         
         self.vbox_g = wx.BoxSizer(wx.VERTICAL)
-        self.vbox_g.Add(self.canvas, 1, wx.LEFT | wx.TOP | wx.EXPAND)
-        
-        self.hbox21 = wx.BoxSizer(wx.HORIZONTAL)
-        self.hbox21.Add(self.toolbar, 1, wx.ALIGN_LEFT | wx.TOP | wx.EXPAND)
-        self.hbox21.Add(self.bm_log, 0, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
-        self.hbox21.AddSpacer(5)
-        
-        self.vbox_g.Add(self.hbox21, 0, wx.EXPAND)
+        self.vbox_g.Add(self.canvas, 1, wx.EXPAND)        
         self.vbox_g.Add(self.log, 0, wx.EXPAND)
         
         self.graphpanel.SetSizer(self.vbox_g)
         self.vbox_g.Fit(self)
         
-        
         # Create the top panel
-        self.loadbutton = wx.Button(self.panel, -1, "Datei laden", size=(80,25))
+        self.loadbutton = wx.Button(self.panel, -1, "Datei\nladen", size=(70,40))
         self.Bind(wx.EVT_BUTTON, self.on_open_file, self.loadbutton)
               
-        self.deletebutton = wx.Button(self.panel, -1, "Datei entfernen", size=(90,25))
+        self.deletebutton = wx.Button(self.panel, -1, "Datei\nentfernen", size=(70,40))
         self.Bind(wx.EVT_BUTTON, self.on_delete_file, self.deletebutton)
         
-        self.colorbutton = wx.Button(self.panel, -1, "Farbe", size=(50,25))
+        self.colorbutton = wx.Button(self.panel, -1, "Farbe\nwechseln", size=(70,40))
         self.Bind(wx.EVT_BUTTON, self.on_color, self.colorbutton)
         
-        self.mergebutton = wx.Button(self.panel, -1, "Daten verbinden", size=(95,25))
+        self.mergebutton = wx.Button(self.panel, -1, "Daten\nverbinden", size=(70,40))
         self.Bind(wx.EVT_BUTTON, self.on_merge, self.mergebutton)
         
-        self.correctbutton = wx.Button(self.panel, -1, "XRR-Korrektur", size=(85,25))
+        self.correctbutton = wx.Button(self.panel, -1, "XRR-\nKorrektur", size=(70,40))
         self.Bind(wx.EVT_BUTTON, self.on_correct, self.correctbutton)
 
-        self.savetextbutton = wx.Button(self.panel, -1, "Daten speichern", size=(90,25))
+        self.savetextbutton = wx.Button(self.panel, -1, "Daten\nspeichern", size=(70,40))
         self.Bind(wx.EVT_BUTTON, self.on_save_text, self.savetextbutton)
         
-        self.saveplotbutton = wx.Button(self.panel, -1, "Grafik speichern", size=(90,25))
+        self.saveplotbutton = wx.Button(self.panel, -1, "Grafik\nspeichern", size=(70,40))
         self.Bind(wx.EVT_BUTTON, self.on_save_plot, self.saveplotbutton)
         
         self.cb_cps = wx.CheckBox(self.panel, -1, "Counts pro Sekunde", style=wx.ALIGN_LEFT)
         self.cb_cps.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb_cps, self.cb_cps)
+        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_cps)
         
         self.cb_log = wx.CheckBox(self.panel, -1, "y logarithmisch", style=wx.ALIGN_LEFT)
         self.cb_log.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb_log, self.cb_log)
+        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_log)
         
         self.cb_grid = wx.CheckBox(self.panel, -1, "Gitternetz anzeigen", style=wx.ALIGN_LEFT)
         self.cb_grid.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb_grid, self.cb_grid)
+        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_grid)
 
         self.cb_header = wx.CheckBox(self.panel, -1, "Kopfdaten mitspeichern", style=wx.ALIGN_LEFT)
         self.cb_header.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb_header, self.cb_header)
+        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_header)
+        
+        self.cb_showlog = wx.CheckBox(self.panel, -1, "Log anzeigen", style=wx.ALIGN_LEFT)
+        self.cb_showlog.SetValue(1)
+        self.Bind(wx.EVT_CHECKBOX, self.on_cb_showlog, self.cb_showlog)
         
         self.list = CheckListCtrl(self.panel)
         self.list.OnCheckItem = self.on_CheckItem
@@ -540,7 +531,7 @@ class BarsFrame(wx.Frame):
         self.list.InsertColumn(4, "Messzeit", width=65)
         self.list.InsertColumn(5, "Datum", width=125)
         self.list.InsertColumn(6, "Kommentar", width=235)
-               
+        
         # Layout with box sizers
         self.vbox = wx.BoxSizer(wx.VERTICAL)
         
@@ -560,15 +551,20 @@ class BarsFrame(wx.Frame):
         self.vbox1 = wx.BoxSizer(wx.VERTICAL)
         self.vbox1.Add(self.cb_cps, 0, border=3, flag=flags)
         self.vbox1.Add(self.cb_log, 0, border=3, flag=flags)
-        self.hbox.Add(self.vbox1, 0, flag = wx.ALIGN_LEFT | wx.CENTER)
         
         self.vbox2 = wx.BoxSizer(wx.VERTICAL)
         self.vbox2.Add(self.cb_grid, 0, border=3, flag=flags)
         self.vbox2.Add(self.cb_header, 0, border=3, flag=flags)
-        self.hbox.Add(self.vbox2, 0, flag = wx.ALIGN_LEFT | wx.CENTER)
+        
+        self.vbox3 = wx.BoxSizer(wx.VERTICAL)
+        self.vbox3.Add(self.cb_showlog, 0, border=3, flag=flags)
+        
+        self.hbox.Add(self.vbox1, 0, flag = wx.CENTER)
+        self.hbox.Add(self.vbox2, 0, flag = wx.CENTER)
+        self.hbox.Add(self.vbox3, 0, flag = wx.CENTER)
                         
         self.vbox.Add(self.hbox, 0, flag = wx.ALIGN_LEFT | wx.TOP)
-        self.vbox.Add(self.list, 1, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.EXPAND)   
+        self.vbox.Add(self.list, 1, border=3, flag = wx.ALL | wx.EXPAND)   
         
         self.panel.SetSizer(self.vbox)
         self.vbox.Fit(self.panel)
@@ -586,21 +582,21 @@ class BarsFrame(wx.Frame):
         # self.axes = self.fig.add_axes([0, 0, 1, 1])
         self.axes = self.fig.add_subplot(111)
         self.axes.grid(self.cb_grid.IsChecked())
+
+        self.rs1 = RectangleSelector(self.axes, self.on_Zoom, drawtype='box', useblit=True, button=1, minspanx=5, minspany=5, spancoords='pixels')
+        self.rs2 = RectangleSelector(self.axes, self.on_Move, drawtype='none', useblit=True, button=3)
         
         checked = 0
         for i in arange(len(self.oldname)):
             if self.list.IsChecked(i):
                 checked += 1
-                if self.cb_log.IsChecked():
-                    if self.cb_cps.IsChecked() and self.time[i] != 0:
-                        self.axes.semilogy(self.data[i][:,0], self.data[i][:,1]/self.time[i], label=self.oldname[i], color=self.colors[i])
-                    else:
-                        self.axes.semilogy(self.data[i][:,0], self.data[i][:,1], label=self.oldname[i], color=self.colors[i])
+                if self.cb_cps.IsChecked() and self.time[i] != 0:
+                    self.axes.plot(self.data[i][:,0], self.data[i][:,1]/self.time[i], label=self.oldname[i], color=self.colors[i])
                 else:
-                    if self.cb_cps.IsChecked() and self.time[i] != 0:
-                        self.axes.plot(self.data[i][:,0], self.data[i][:,1]/self.time[i], label=self.oldname[i], color=self.colors[i])
-                    else:
-                        self.axes.plot(self.data[i][:,0], self.data[i][:,1], label=self.oldname[i], color=self.colors[i])
+                    self.axes.plot(self.data[i][:,0], self.data[i][:,1], label=self.oldname[i], color=self.colors[i])
+        
+        if self.cb_log.IsChecked() and self.data != []:
+            self.axes.set_yscale('log')
         
         if checked > 0:
             prop = matplotlib.font_manager.FontProperties(size=8) 
@@ -624,6 +620,34 @@ class BarsFrame(wx.Frame):
         self.on_Resize('')
         self.canvas.draw()
         
+    def on_Zoom(self, eclick, erelease):
+        'eclick and erelease are the press and release events'
+        x1, y1 = eclick.xdata, eclick.ydata
+        x2, y2 = erelease.xdata, erelease.ydata
+        self.axes.set_xlim(min(x1,x2), max(x1,x2))
+        self.axes.set_ylim(min(y1,y2), max(y1,y2))
+        self.canvas.draw()
+                
+    def on_Move(self, eclick, erelease):
+        'eclick and erelease are the press and release events'
+        x1, y1 = eclick.xdata, eclick.ydata
+        x2, y2 = erelease.xdata, erelease.ydata
+        xl, xm = self.axes.get_xlim()
+        yl, ym = self.axes.get_ylim()
+        
+        if self.axes.get_yscale() == 'log':
+            self.axes.set_xlim(exp(log(xl)+log(x1)-log(x2)), exp(log(xm)+log(x1)-log(x2)))
+            self.axes.set_ylim(exp(log(yl)+log(y1)-log(y2)), exp(log(ym)+log(y1)-log(y2)))
+        else:
+            self.axes.set_xlim(xl+x1-x2, xm+x1-x2)
+            self.axes.set_ylim(yl+y1-y2, ym+y1-y2)
+            
+        self.canvas.draw()
+        
+    def on_Press(self, event):
+        if event.dblclick:
+            self.axes.autoscale()
+        
     def on_UpdateCursor(self, event):
         if event.inaxes:
             if abs(event.xdata) > 1e-3 and abs(event.xdata) < 1e5:
@@ -634,9 +658,11 @@ class BarsFrame(wx.Frame):
                 text2 = 'y = %.5f' %event.ydata
             else:   
                 text2 = 'y = %.4e' %event.ydata
+            self.statusbar.SetStatusText('Linksklick: Zoomen, Doppelklick: Auto-Zoom, Rechtsklick: Bewegen', 0)
             self.statusbar.SetStatusText(text1, 1)
             self.statusbar.SetStatusText(text2, 2)
         else:
+            self.statusbar.SetStatusText('', 0)
             self.statusbar.SetStatusText('', 1)
             self.statusbar.SetStatusText('', 2)
             
@@ -649,7 +675,7 @@ class BarsFrame(wx.Frame):
         except Exception as error:
             return
             # print error
-            
+    
     def on_CheckItem(self, index, flag):
         if self.list.IsChecked(index):
             self.checked[index] = 1
@@ -676,16 +702,7 @@ class BarsFrame(wx.Frame):
                 self.list.CheckItem(i)
         self.redraw = 1
     
-    def on_cb_cps(self, event):
-        self.draw_figure()
-        
-    def on_cb_log(self, event):
-        self.draw_figure()
-    
-    def on_cb_grid(self, event):
-        self.draw_figure()
-        
-    def on_cb_header(self, event):
+    def on_cb(self, event):
         self.draw_figure()
    
     def on_color(self, event):
@@ -1166,13 +1183,11 @@ class BarsFrame(wx.Frame):
                 
             i = self.list.GetNextSelected(i)
             
-    def on_hide_log(self, event):
-        if self.bm_log.GetLabel() == 'Log verbergen':
-            self.log.Hide()
-            self.bm_log.SetLabel('Log anzeigen')
-        else:
+    def on_cb_showlog(self, event):
+        if self.cb_showlog.IsChecked():
             self.log.Show()
-            self.bm_log.SetLabel('Log verbergen')
+        else:
+            self.log.Hide()
         self.vbox_g.Layout()
         
     def on_about(self, event):
@@ -1189,7 +1204,7 @@ class BarsFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.4 - 14.02.2013
+        Version 0.5 - 18.06.2013
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()

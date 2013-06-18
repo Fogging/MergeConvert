@@ -1,3 +1,8 @@
+In version 0.5 following improvements were implemented:
+- Zooming, auto zooming and panning now implemented by left click, double click and right click.
+- Removed Matplotlib toolbar and changed button "Log anzeigen" to checkbox.
+- Changed button sizes so that two lines of text fit.
+
 In version 0.4 following improvements were implemented:
 - Fixed import of raw files (Version 3) from D8 Discover, now reading additional data start offset given in file
 - Included log area near the bottom of the window with possibility to hide
