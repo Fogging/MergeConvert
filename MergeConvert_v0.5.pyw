@@ -480,25 +480,25 @@ class BarsFrame(wx.Frame):
         self.vbox_g.Fit(self)
         
         # Create the top panel
-        self.loadbutton = wx.Button(self.panel, -1, "Datei\nladen", size=(70,40))
+        self.loadbutton = wx.Button(self.panel, -1, "Datei\nladen", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_open_file, self.loadbutton)
               
-        self.deletebutton = wx.Button(self.panel, -1, "Datei\nentfernen", size=(70,40))
+        self.deletebutton = wx.Button(self.panel, -1, "Datei\nentfernen", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_delete_file, self.deletebutton)
         
-        self.colorbutton = wx.Button(self.panel, -1, "Farbe\nwechseln", size=(70,40))
+        self.colorbutton = wx.Button(self.panel, -1, "Farbe\nwechseln", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_color, self.colorbutton)
         
-        self.mergebutton = wx.Button(self.panel, -1, "Daten\nverbinden", size=(70,40))
+        self.mergebutton = wx.Button(self.panel, -1, "Daten\nverbinden", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_merge, self.mergebutton)
         
-        self.correctbutton = wx.Button(self.panel, -1, "XRR-\nKorrektur", size=(70,40))
+        self.correctbutton = wx.Button(self.panel, -1, "XRR-\nKorrektur", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_correct, self.correctbutton)
 
-        self.savetextbutton = wx.Button(self.panel, -1, "Daten\nspeichern", size=(70,40))
+        self.savetextbutton = wx.Button(self.panel, -1, "Daten\nspeichern", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_save_text, self.savetextbutton)
         
-        self.saveplotbutton = wx.Button(self.panel, -1, "Grafik\nspeichern", size=(70,40))
+        self.saveplotbutton = wx.Button(self.panel, -1, "Grafik\nspeichern", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_save_plot, self.saveplotbutton)
         
         self.cb_cps = wx.CheckBox(self.panel, -1, "Counts pro Sekunde", style=wx.ALIGN_LEFT)
@@ -563,8 +563,8 @@ class BarsFrame(wx.Frame):
         self.hbox.Add(self.vbox2, 0, flag = wx.CENTER)
         self.hbox.Add(self.vbox3, 0, flag = wx.CENTER)
                         
-        self.vbox.Add(self.hbox, 0, flag = wx.ALIGN_LEFT | wx.TOP)
-        self.vbox.Add(self.list, 1, border=3, flag = wx.ALL | wx.EXPAND)   
+        self.vbox.Add(self.hbox, 0, flag = wx.ALIGN_LEFT)
+        self.vbox.Add(self.list, 1, border=3, flag = wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND)   
         
         self.panel.SetSizer(self.vbox)
         self.vbox.Fit(self.panel)
