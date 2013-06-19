@@ -465,6 +465,7 @@ class BarsFrame(wx.Frame):
         self.canvas.mpl_connect('motion_notify_event', self.on_UpdateCursor)
         self.canvas.mpl_connect('resize_event', self.on_Resize)
         self.canvas.mpl_connect('button_press_event', self.on_Press)
+        self.canvas.mpl_connect('scroll_event', self.on_Scroll)
         
         self.log = wx.TextCtrl(self.graphpanel, -1, size=(666,66), style = wx.TE_MULTILINE|wx.TE_READONLY)
         self.log.SetFont(wx.Font(8, wx.MODERN, wx.NORMAL, wx.NORMAL, 0, "Sans"))
@@ -635,15 +636,37 @@ class BarsFrame(wx.Frame):
         xl, xm = self.axes.get_xlim()
         yl, ym = self.axes.get_ylim()
         
+        self.axes.set_xlim(xl+x1-x2, xm+x1-x2)
+        
         if self.axes.get_yscale() == 'log':
-            self.axes.set_xlim(exp(log(xl)+log(x1)-log(x2)), exp(log(xm)+log(x1)-log(x2)))
             self.axes.set_ylim(exp(log(yl)+log(y1)-log(y2)), exp(log(ym)+log(y1)-log(y2)))
         else:
-            self.axes.set_xlim(xl+x1-x2, xm+x1-x2)
             self.axes.set_ylim(yl+y1-y2, ym+y1-y2)
             
         self.canvas.draw()
         
+    def on_Scroll(self, event):
+        x, y = event.xdata, event.ydata
+        xl, xm = self.axes.get_xlim()
+        yl, ym = self.axes.get_ylim()
+        factor = 1 - event.step / 20.0
+        
+        if not 'shift' in str(event.key):
+            xln = x - factor * (x - xl)
+            xmn = x + factor * (xm - x)
+            self.axes.set_xlim(xln, xmn)
+        if not 'ctrl' in str(event.key):
+            if self.axes.get_yscale() == 'log':
+                yln_log = log(y) - factor * (log(y) - log(yl))
+                ymn_log = log(y) + factor * (log(ym) - log(y))
+                self.axes.set_ylim(exp(yln_log), exp(ymn_log))
+            else:
+                yln = y - factor * (y - yl)
+                ymn = y + factor * (ym - y)
+                self.axes.set_ylim(yln, ymn)
+                
+        self.canvas.draw()
+            
     def on_Press(self, event):
         if event.dblclick:
             self.axes.autoscale()
@@ -658,7 +681,7 @@ class BarsFrame(wx.Frame):
                 text2 = 'y = %.5f' %event.ydata
             else:   
                 text2 = 'y = %.4e' %event.ydata
-            self.statusbar.SetStatusText('Linksklick: Zoomen, Doppelklick: Auto-Zoom, Rechtsklick: Bewegen', 0)
+            self.statusbar.SetStatusText('Linksklick: Zoomen, Doppelklick: Auto-Zoom, Rechtsklick: Bewegen, Scrollen (+Shift/Ctrl): Zoomen', 0)
             self.statusbar.SetStatusText(text1, 1)
             self.statusbar.SetStatusText(text2, 2)
         else:
@@ -670,7 +693,7 @@ class BarsFrame(wx.Frame):
         try:
             # self.fig.tight_layout(pad=1.0)
             x, y = self.fig.get_size_inches()
-            self.fig.subplots_adjust(left=0.85/x, right=1-0.2/x, bottom=0.4/y, top=1-0.35/y)
+            self.fig.subplots_adjust(left=0.8/x, right=1-0.2/x, bottom=0.4/y, top=1-0.35/y)
             self.titel.set_position((0.5, 1+0.05/y))
         except Exception as error:
             return

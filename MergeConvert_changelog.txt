@@ -1,12 +1,13 @@
 In version 0.5 following improvements were implemented:
 - Zooming, auto zooming and panning now implemented by left click, double click and right click.
+- Zooming also possible by Scrolling (pure x and y zooming selectable by Ctrl and Shift buttons).
 - Removed Matplotlib toolbar and changed button "Log anzeigen" to checkbox.
 - Changed button sizes so that two lines of text fit.
 
 In version 0.4 following improvements were implemented:
-- Fixed import of raw files (Version 3) from D8 Discover, now reading additional data start offset given in file
-- Included log area near the bottom of the window with possibility to hide
-- Changed file extension to pyw, so no console is opening during runtime (all errors are now displayed in log area)
+- Fixed import of raw files (Version 3) from D8 Discover, now reading additional data start offset given in file.
+- Included log area near the bottom of the window with possibility to hide.
+- Changed file extension to pyw, so no console is opening during runtime (all errors are now displayed in log area).
 
 In version 0.3.2 following improvements were implemented:
 - Workaround for check of equal step widths before data merging, now assuming equal step width for deviations below 1e-7.
