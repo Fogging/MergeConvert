@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigCanvas, NavigationToolbar2WxAgg as NavigationToolbar
     
-from pylab import arange, argwhere, array, exp, float_, float32, float64, fromfile, loadtxt, log, mod, pi, savetxt, sin, vstack, zeros
+from pylab import arange, argwhere, array, exp, float_, int32, float32, float64, fromfile, loadtxt, log, mod, pi, savetxt, sin, vstack, zeros
 from StringIO import StringIO
 from time import gmtime, strftime
 from scipy.optimize import leastsq
@@ -460,18 +460,17 @@ class BarsFrame(wx.Frame):
         
         # Create the mpl Figure and FigCanvas objects: 9x6 inches, 100 dots-per-inch
         self.dpi = 100
-        self.fig = Figure((9, 6), dpi=self.dpi)
+        self.fig = Figure((9.1, 6), dpi=self.dpi)
         self.canvas = FigCanvas(self.graphpanel, -1, self.fig)
         self.canvas.mpl_connect('motion_notify_event', self.on_UpdateCursor)
         self.canvas.mpl_connect('resize_event', self.on_Resize)
         self.canvas.mpl_connect('button_press_event', self.on_Press)
         self.canvas.mpl_connect('scroll_event', self.on_Scroll)
         
-        self.log = wx.TextCtrl(self.graphpanel, -1, size=(666,66), style = wx.TE_MULTILINE|wx.TE_READONLY)
+        self.log = wx.TextCtrl(self.graphpanel, -1, size=(666,66), style = wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
         self.log.SetFont(wx.Font(8, wx.MODERN, wx.NORMAL, wx.NORMAL, 0, "Sans"))
-        redir = RedirectText(self.log)
-        sys.stdout = redir
-        sys.stderr = redir
+        sys.stdout = RedirectText(self.log, 'black')
+        sys.stderr = RedirectText(self.log, 'red')
         
         self.vbox_g = wx.BoxSizer(wx.VERTICAL)
         self.vbox_g.Add(self.canvas, 1, wx.EXPAND)        
@@ -518,37 +517,27 @@ class BarsFrame(wx.Frame):
         self.cb_header.SetValue(1)
         self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_header)
         
+        self.cb_legend = wx.CheckBox(self.panel, -1, "Legende anzeigen", style=wx.ALIGN_LEFT)
+        self.cb_legend.SetValue(1)
+        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_legend)
+        
         self.cb_showlog = wx.CheckBox(self.panel, -1, "Log anzeigen", style=wx.ALIGN_LEFT)
         self.cb_showlog.SetValue(1)
         self.Bind(wx.EVT_CHECKBOX, self.on_cb_showlog, self.cb_showlog)
         
         self.list = CheckListCtrl(self.panel)
         self.list.OnCheckItem = self.on_CheckItem
-        
-        self.list.InsertColumn(0, "Dateiname", width=230)
+        self.list.InsertColumn(0, "Dateiname", width=240)
         self.list.InsertColumn(1, "Startwinkel", width=70)
         self.list.InsertColumn(2, "Endwinkel", width=70)
         self.list.InsertColumn(3, "Schrittweite", width=75)
         self.list.InsertColumn(4, "Messzeit", width=65)
-        self.list.InsertColumn(5, "Datum", width=125)
-        self.list.InsertColumn(6, "Kommentar", width=235)
+        self.list.InsertColumn(5, "Datum", width=120)
+        self.list.InsertColumn(6, "Kommentar", width=240)
         
         # Layout with box sizers
-        self.vbox = wx.BoxSizer(wx.VERTICAL)
-        
-        self.hbox = wx.BoxSizer(wx.HORIZONTAL)
         flags = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL
         
-        self.hbox.Add(self.loadbutton, 0, border=3, flag=flags)
-        self.hbox.Add(self.deletebutton, 0, border=3, flag=flags)
-        self.hbox.Add(self.colorbutton, 0, border=3, flag=flags)
-        self.hbox.Add(self.mergebutton, 0, border=3, flag=flags)
-        self.hbox.Add(self.correctbutton, 0, border=3, flag=flags)
-        self.hbox.Add(self.savetextbutton, 0, border=3, flag=flags)
-        self.hbox.Add(self.saveplotbutton, 0, border=3, flag=flags)
-               
-        self.hbox.AddSpacer(10)
-                
         self.vbox1 = wx.BoxSizer(wx.VERTICAL)
         self.vbox1.Add(self.cb_cps, 0, border=3, flag=flags)
         self.vbox1.Add(self.cb_log, 0, border=3, flag=flags)
@@ -558,12 +547,23 @@ class BarsFrame(wx.Frame):
         self.vbox2.Add(self.cb_header, 0, border=3, flag=flags)
         
         self.vbox3 = wx.BoxSizer(wx.VERTICAL)
+        self.vbox3.Add(self.cb_legend, 0, border=3, flag=flags)
         self.vbox3.Add(self.cb_showlog, 0, border=3, flag=flags)
-        
+ 
+        self.hbox = wx.BoxSizer(wx.HORIZONTAL)
+        self.hbox.Add(self.loadbutton, 0, border=3, flag=flags)
+        self.hbox.Add(self.deletebutton, 0, border=3, flag=flags)
+        self.hbox.Add(self.colorbutton, 0, border=3, flag=flags)
+        self.hbox.Add(self.mergebutton, 0, border=3, flag=flags)
+        self.hbox.Add(self.correctbutton, 0, border=3, flag=flags)
+        self.hbox.Add(self.savetextbutton, 0, border=3, flag=flags)
+        self.hbox.Add(self.saveplotbutton, 0, border=3, flag=flags)
+        self.hbox.AddSpacer(7)      
         self.hbox.Add(self.vbox1, 0, flag = wx.CENTER)
         self.hbox.Add(self.vbox2, 0, flag = wx.CENTER)
         self.hbox.Add(self.vbox3, 0, flag = wx.CENTER)
-                        
+        
+        self.vbox = wx.BoxSizer(wx.VERTICAL)
         self.vbox.Add(self.hbox, 0, flag = wx.ALIGN_LEFT)
         self.vbox.Add(self.list, 1, border=3, flag = wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND)   
         
@@ -599,7 +599,7 @@ class BarsFrame(wx.Frame):
         if self.cb_log.IsChecked() and self.data != []:
             self.axes.set_yscale('log')
         
-        if checked > 0:
+        if self.cb_legend.IsChecked() and checked > 0:
             prop = matplotlib.font_manager.FontProperties(size=8) 
             self.axes.legend(loc=0, prop=prop)
         
@@ -1002,8 +1002,9 @@ class BarsFrame(wx.Frame):
                         if "ScanStepTime" in line:
                             time = float(line.split(',')[1])
                         if data_start == 1:
-                            for x in line.strip(',/\n').split(','):
-                                intens.append(x.strip())
+                            for x in line.rstrip('/\n').split(','):
+                                if not x.strip() == '':
+                                    intens.append(x.strip())
                         if "RawScan" in line:
                             data_start = 1
                     f.close()
@@ -1248,11 +1249,15 @@ class BarsFrame(wx.Frame):
         
         
 class RedirectText(object):
-    def __init__(self, aWxTextCtrl):
+    """ Redirects STDOUT and STDERR to log window. """
+    def __init__(self, aWxTextCtrl, color):
         self.out = aWxTextCtrl
+        self.color = color
  
-    def write(self,string):
+    def write(self, string):
+        self.out.SetDefaultStyle(wx.TextAttr(self.color))
         self.out.WriteText(string)
+        self.out.SetInsertionPoint(self.out.GetLastPosition())
 
         
 if __name__ == '__main__':
