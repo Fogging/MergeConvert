@@ -5,6 +5,7 @@ In version 0.5 following improvements were implemented:
 - Zooming also possible by scrolling (pure x and y zooming selectable by Ctrl and Shift buttons).
 - Removed Matplotlib toolbar and changed button "Log anzeigen" to checkbox.
 - Changed button sizes so that two lines of text fit in them.
+- Changed number of ticks for x axis to 10.
 - Added checkbox "Legende anzeigen".
 
 In version 0.4 following improvements were implemented:

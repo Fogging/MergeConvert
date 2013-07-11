@@ -582,6 +582,7 @@ class BarsFrame(wx.Frame):
         # Since we have only one plot, we can use add_axes instead of add_subplot, but then the subplot configuration tool in the navigation toolbar wouldn't work.
         # self.axes = self.fig.add_axes([0, 0, 1, 1])
         self.axes = self.fig.add_subplot(111)
+        self.axes.locator_params(axis = 'x', nbins = 10)
         self.axes.grid(self.cb_grid.IsChecked())
 
         self.rs1 = RectangleSelector(self.axes, self.on_Zoom, drawtype='box', useblit=True, button=1, minspanx=5, minspany=5, spancoords='pixels')
