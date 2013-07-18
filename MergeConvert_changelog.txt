@@ -1,8 +1,8 @@
 In version 0.5 following improvements were implemented:
-- New features require Matplotlib version later than 1.2.1 !!!
-- Removed some bugs for raw and udf import as well as log window.
-- Zooming, auto zooming and panning now implemented by left click, double click and right click.
+- Removed some bugs for raw and udf import as well as for log window.
+- Zooming, auto zooming and panning now implemented by left click and right click.
 - Zooming also possible by scrolling (pure x and y zooming selectable by Ctrl and Shift buttons).
+- Auto zoom by double click requires Matplotlib version later than 1.2!
 - Removed Matplotlib toolbar and changed button "Log anzeigen" to checkbox.
 - Changed button sizes so that two lines of text fit in them.
 - Changed number of ticks for x axis to 10.

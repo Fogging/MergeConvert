@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 
 # Copyright 2012 by Hartmut Stoecker
 # Contact: hartmut.stoecker@physik.tu-freiberg.de
@@ -26,6 +26,7 @@ class CheckListCtrl(wx.ListCtrl, CheckListCtrlMixin):
     def __init__(self, parent):
         wx.ListCtrl.__init__(self, parent, -1, style=wx.LC_REPORT)
         CheckListCtrlMixin.__init__(self)
+
         
 class MergeWindow(wx.Dialog):
     """ Dialog to select merge parameters. """
@@ -232,7 +233,6 @@ class MergeWindow(wx.Dialog):
         app.frame.checked[i] = 1
         
 
-        
 class CorrectWindow(wx.Dialog):
     """ Dialog to select XRR correction parameters. """
 
@@ -381,7 +381,7 @@ class CorrectWindow(wx.Dialog):
         app.frame.checked[i] = 1
         
 
-class BarsFrame(wx.Frame):
+class MainFrame(wx.Frame):
     """ The main frame of the application."""
     
     def __init__(self):
@@ -584,9 +584,9 @@ class BarsFrame(wx.Frame):
         self.axes = self.fig.add_subplot(111)
         self.axes.locator_params(axis = 'x', nbins = 10)
         self.axes.grid(self.cb_grid.IsChecked())
-
-        self.rs1 = RectangleSelector(self.axes, self.on_Zoom, drawtype='box', useblit=True, button=1, minspanx=5, minspany=5, spancoords='pixels')
-        self.rs2 = RectangleSelector(self.axes, self.on_Move, drawtype='none', useblit=True, button=3)
+        
+        self.rs1 = RectangleSelector(self.axes, self.on_Zoom, drawtype='box', button=1, minspanx=5, minspany=5, spancoords='pixels')
+        self.rs2 = RectangleSelector(self.axes, self.on_Move, drawtype='box', button=3)   # only 'box' will work without problems here
         
         checked = 0
         for i in arange(len(self.oldname)):
@@ -626,8 +626,11 @@ class BarsFrame(wx.Frame):
         'eclick and erelease are the press and release events'
         x1, y1 = eclick.xdata, eclick.ydata
         x2, y2 = erelease.xdata, erelease.ydata
-        self.axes.set_xlim(min(x1,x2), max(x1,x2))
-        self.axes.set_ylim(min(y1,y2), max(y1,y2))
+        if x2 > x1:
+            self.axes.set_xlim(min(x1,x2), max(x1,x2))
+            self.axes.set_ylim(min(y1,y2), max(y1,y2))
+        else:
+            self.axes.autoscale()
         self.canvas.draw()
                 
     def on_Move(self, eclick, erelease):
@@ -656,7 +659,7 @@ class BarsFrame(wx.Frame):
             xln = x - factor * (x - xl)
             xmn = x + factor * (xm - x)
             self.axes.set_xlim(xln, xmn)
-        if not 'ctrl' in str(event.key):
+        if not 'control' in str(event.key):
             if self.axes.get_yscale() == 'log':
                 yln_log = log(y) - factor * (log(y) - log(yl))
                 ymn_log = log(y) + factor * (log(ym) - log(y))
@@ -669,8 +672,12 @@ class BarsFrame(wx.Frame):
         self.canvas.draw()
             
     def on_Press(self, event):
-        if event.dblclick:
-            self.axes.autoscale()
+        if hasattr(event, 'dblclick'):
+            if event.dblclick:
+                self.axes.autoscale()
+                self.canvas.draw()
+        else:
+            print('Matplotlib Version 1.2 oder neuer zur Doppelklick-Erkennung erforderlich!')
         
     def on_UpdateCursor(self, event):
         if event.inaxes:
@@ -682,7 +689,7 @@ class BarsFrame(wx.Frame):
                 text2 = 'y = %.5f' %event.ydata
             else:   
                 text2 = 'y = %.4e' %event.ydata
-            self.statusbar.SetStatusText('Linksklick: Zoomen, Doppelklick: Auto-Zoom, Rechtsklick: Bewegen, Scrollen (+Shift/Ctrl): Zoomen', 0)
+            self.statusbar.SetStatusText('Linksklick: Zoomen (links>rechts) bzw. Autozoom (rechts>links), Rechtsklick: Bewegen, Scrollen: Zoomen (Strg: x, Shift: y)', 0)
             self.statusbar.SetStatusText(text1, 1)
             self.statusbar.SetStatusText(text2, 2)
         else:
@@ -1229,7 +1236,7 @@ class BarsFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.5 - 18.06.2013
+        Version 0.5 - 18.07.2013
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
@@ -1263,6 +1270,6 @@ class RedirectText(object):
         
 if __name__ == '__main__':
     app = wx.PySimpleApp()
-    app.frame = BarsFrame()
+    app.frame = MainFrame()
     app.frame.Show()
     app.MainLoop()
