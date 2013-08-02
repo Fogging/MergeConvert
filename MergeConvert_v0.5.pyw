@@ -1,11 +1,11 @@
 ﻿#!/usr/bin/env python
 
-# Copyright 2012 by Hartmut Stoecker
+# Copyright 2013 by Hartmut Stoecker
 # Contact: hartmut.stoecker@physik.tu-freiberg.de
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.5.
+# The present version is 0.5.1.
 
 import os, wx, sys
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigCanvas, NavigationToolbar2WxAgg as NavigationToolbar
     
-from pylab import arange, argwhere, array, exp, float_, int32, float32, float64, fromfile, loadtxt, log, mod, pi, savetxt, sin, vstack, zeros
+from pylab import append, arange, argwhere, array, exp, float_, int32, float32, float64, fromfile, linspace, loadtxt, log, mod, ones, pi, savetxt, sin, vstack, zeros
 from StringIO import StringIO
 from time import gmtime, strftime
 from scipy.optimize import leastsq
@@ -54,7 +54,7 @@ class MergeWindow(wx.Dialog):
         self.redrawbutton = wx.Button(self.panel, -1, "Neu zeichnen")
         self.Bind(wx.EVT_BUTTON, self.do_merge, self.redrawbutton)
         
-        nametext = app.frame.oldname[self.a] + ' + ' + app.frame.oldname[self.b]
+        nametext = app.frame.filename[self.a] + ' + ' + app.frame.filename[self.b]
         self.namelabel = wx.StaticText(self.panel, -1, "Name:")
         self.name = wx.TextCtrl(self.panel, -1, nametext, style=wx.TE_PROCESS_ENTER, size=(240, 20))  
         self.name.Bind(wx.EVT_TEXT_ENTER, self.do_merge)
@@ -200,10 +200,10 @@ class MergeWindow(wx.Dialog):
             app.frame.draw_figure()
             
     def append_data(self):
-        app.frame.colors.append(app.frame.defaultcolors[mod(len(app.frame.newname), len(app.frame.defaultcolors))])
-        app.frame.newname.append(os.path.splitext(self.name.GetValue())[0])
-        app.frame.oldname.append(self.name.GetValue())
-        app.frame.comment.append(app.frame.oldname[self.a] + ' + ' + app.frame.oldname[self.b] + ' (skaliert auf ' + str(self.value) + ')')
+        app.frame.color.append(app.frame.defaultcolors[mod(len(app.frame.name), len(app.frame.defaultcolors))])
+        app.frame.name.append(os.path.splitext(self.name.GetValue())[0])
+        app.frame.filename.append(self.name.GetValue())
+        app.frame.comment.append(app.frame.filename[self.a] + ' + ' + app.frame.filename[self.b] + ' (skaliert auf ' + str(self.value) + ')')
         app.frame.date.append(strftime("%d-%b-%Y, %H:%M:%S"))
         app.frame.wavelength.append(app.frame.wavelength[self.a])
         app.frame.omega.append(app.frame.omega[self.a])
@@ -214,21 +214,21 @@ class MergeWindow(wx.Dialog):
         app.frame.range.append(self.angle[-1] - self.angle[0])
         app.frame.step.append(self.angle[1] - self.angle[0])
         app.frame.time.append(min(app.frame.time[self.a], app.frame.time[self.b]))
-        app.frame.number.append(len(self.angle))
+        app.frame.points.append(len(self.angle))
         app.frame.data.append(vstack((self.angle, self.int)).T)
         app.frame.checked.append(1)
         
     def replace_data(self):
-        i = len(app.frame.newname) - 1
+        i = len(app.frame.name) - 1
     
-        app.frame.newname[i] = os.path.splitext(self.name.GetValue())[0]
-        app.frame.oldname[i] = self.name.GetValue()
-        app.frame.comment[i] = app.frame.oldname[self.a] + ' + ' + app.frame.oldname[self.b] + ' (skaliert auf ' + str(self.value) + ')'
+        app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
+        app.frame.filename[i] = self.name.GetValue()
+        app.frame.comment[i] = app.frame.filename[self.a] + ' + ' + app.frame.filename[self.b] + ' (skaliert auf ' + str(self.value) + ')'
         app.frame.date[i] = strftime("%d-%b-%Y, %H:%M:%S")
         app.frame.first[i] = self.angle[0]
         app.frame.range[i] = self.angle[-1] - self.angle[0]
         app.frame.step[i] = self.angle[1] - self.angle[0]
-        app.frame.number[i] = len(self.angle)
+        app.frame.points[i] = len(self.angle)
         app.frame.data[i] = vstack((self.angle, self.int)).T
         app.frame.checked[i] = 1
         
@@ -265,7 +265,7 @@ class CorrectWindow(wx.Dialog):
         self.redrawbutton = wx.Button(self.panel, -1, "Neu zeichnen")
         self.Bind(wx.EVT_BUTTON, self.do_correct, self.redrawbutton)
         
-        nametext = os.path.splitext(app.frame.oldname[self.a])[0] + '_corr'
+        nametext = os.path.splitext(app.frame.filename[self.a])[0] + '_corr'
         self.namelabel = wx.StaticText(self.panel, -1, "Name:")
         self.name = wx.TextCtrl(self.panel, -1, nametext, style=wx.TE_PROCESS_ENTER, size=(260, 20))  
         self.name.Bind(wx.EVT_TEXT_ENTER, self.do_correct)
@@ -348,10 +348,10 @@ class CorrectWindow(wx.Dialog):
         app.frame.draw_figure()
             
     def append_data(self):
-        app.frame.colors.append(app.frame.defaultcolors[mod(len(app.frame.newname), len(app.frame.defaultcolors))])
-        app.frame.newname.append(os.path.splitext(self.name.GetValue())[0])
-        app.frame.oldname.append(self.name.GetValue())
-        app.frame.comment.append(app.frame.oldname[self.a] + ' (korrigiert mit Strahl = ' + str(self.beamsize) + ' mm und Probe = ' + str(self.samplesize) + ' mm)')
+        app.frame.color.append(app.frame.defaultcolors[mod(len(app.frame.name), len(app.frame.defaultcolors))])
+        app.frame.name.append(os.path.splitext(self.name.GetValue())[0])
+        app.frame.filename.append(self.name.GetValue())
+        app.frame.comment.append(app.frame.filename[self.a] + ' (korrigiert mit Strahl = ' + str(self.beamsize) + ' mm und Probe = ' + str(self.samplesize) + ' mm)')
         app.frame.date.append(strftime("%d-%b-%Y, %H:%M:%S"))
         app.frame.wavelength.append(app.frame.wavelength[self.a])
         app.frame.omega.append(app.frame.omega[self.a])
@@ -362,21 +362,21 @@ class CorrectWindow(wx.Dialog):
         app.frame.range.append(self.angle[-1] - self.angle[0])
         app.frame.step.append(self.angle[1] - self.angle[0])
         app.frame.time.append(app.frame.time[self.a])
-        app.frame.number.append(len(self.angle))
+        app.frame.points.append(len(self.angle))
         app.frame.data.append(vstack((self.angle, self.res)).T)
         app.frame.checked.append(1)
         
     def replace_data(self):
-        i = len(app.frame.newname) - 1
+        i = len(app.frame.name) - 1
     
-        app.frame.newname[i] = os.path.splitext(self.name.GetValue())[0]
-        app.frame.oldname[i] = self.name.GetValue()
-        app.frame.comment[i] = app.frame.oldname[self.a] + ' (korrigiert mit Strahl = ' + str(self.beamsize) + ' mm und Probe = ' + str(self.samplesize) + ' mm)'
+        app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
+        app.frame.filename[i] = self.name.GetValue()
+        app.frame.comment[i] = app.frame.filename[self.a] + ' (korrigiert mit Strahl = ' + str(self.beamsize) + ' mm und Probe = ' + str(self.samplesize) + ' mm)'
         app.frame.date[i] = strftime("%d-%b-%Y, %H:%M:%S")
         app.frame.first[i] = self.angle[0]
         app.frame.range[i] = self.angle[-1] - self.angle[0]
         app.frame.step[i] = self.angle[1] - self.angle[0]
-        app.frame.number[i] = len(self.angle)
+        app.frame.points[i] = len(self.angle)
         app.frame.data[i] = vstack((self.angle, self.res)).T
         app.frame.checked[i] = 1
         
@@ -387,10 +387,11 @@ class MainFrame(wx.Frame):
     def __init__(self):
         wx.Frame.__init__(self, None, -1, 'MergeConvert - Anzeige, Konvertierung und Verbinden von Diffraktometer-Dateien')
         
-        self.newname = []
-        self.oldname = []
-        self.comment = []
+        self.filename = []
+        self.name = []
+        self.color = []
         self.date = []
+        self.comment = []
         self.wavelength = []
         self.omega = []
         self.twotheta = []
@@ -400,14 +401,14 @@ class MainFrame(wx.Frame):
         self.range = []
         self.step = []
         self.time = []
-        self.number = []
+        self.points = []
         self.data = []
         
         self.savename = ''
         self.checked = []
         self.redraw = 1
-        self.defaultcolors = [(0,0,1), (0,0.5,0), (1,0,0), (0,0.75,0.75), (0.75,0,0.75), (0.75,0.75,0), (0,0,0)]
-        self.colors = []
+        self.lastcolor = 0
+        self.defaultcolors = array([(0,0,1), (0,0.5,0), (1,0,0), (0,0.75,0.75), (0.75,0,0.75), (0.75,0.75,0), (0,0,0), (0.0,1.0,0.5), (0.5,1.0,0.0), (1.0,0.5,0.0)])
         
         self.create_menu()
         self.create_status_bar()
@@ -589,13 +590,13 @@ class MainFrame(wx.Frame):
         self.rs2 = RectangleSelector(self.axes, self.on_Move, drawtype='box', button=3)   # only 'box' will work without problems here
         
         checked = 0
-        for i in arange(len(self.oldname)):
+        for i in arange(len(self.filename)):
             if self.list.IsChecked(i):
                 checked += 1
                 if self.cb_cps.IsChecked() and self.time[i] != 0:
-                    self.axes.plot(self.data[i][:,0], self.data[i][:,1]/self.time[i], label=self.oldname[i], color=self.colors[i])
+                    self.axes.plot(self.data[i][:,0], self.data[i][:,1]/self.time[i], label=self.filename[i], color=self.color[i])
                 else:
-                    self.axes.plot(self.data[i][:,0], self.data[i][:,1], label=self.oldname[i], color=self.colors[i])
+                    self.axes.plot(self.data[i][:,0], self.data[i][:,1], label=self.filename[i], color=self.color[i])
         
         if self.cb_log.IsChecked() and self.data != []:
             self.axes.set_yscale('log')
@@ -604,7 +605,7 @@ class MainFrame(wx.Frame):
             prop = matplotlib.font_manager.FontProperties(size=8) 
             self.axes.legend(loc=0, prop=prop)
         
-        x = len(self.oldname)
+        x = len(self.filename)
         if x == 1:
             titeltext = 'Plot of X-ray diffraction data (' + str(checked) + ' of ' + str(x) + ' dataset selected)'
         else:
@@ -718,8 +719,8 @@ class MainFrame(wx.Frame):
     def update_list(self):
         self.list.DeleteAllItems()
     
-        for i in arange(len(self.oldname)):
-            self.list.InsertStringItem(i, self.oldname[i])
+        for i in arange(len(self.filename)):
+            self.list.InsertStringItem(i, self.filename[i])
             self.list.SetStringItem(i, 1, str(self.first[i]))
             self.list.SetStringItem(i, 2, str(self.range[i]+self.first[i]))
             self.list.SetStringItem(i, 3, str(self.step[i]))
@@ -728,7 +729,7 @@ class MainFrame(wx.Frame):
             self.list.SetStringItem(i, 6, self.comment[i])
         
         self.redraw = 0
-        for i in arange(len(self.oldname)):
+        for i in arange(len(self.filename)):
             if self.checked[i] == 1:
                 self.list.CheckItem(i)
         self.redraw = 1
@@ -749,12 +750,12 @@ class MainFrame(wx.Frame):
             data.SetCustomColour(2, (178, 0, 38))
             data.SetCustomColour(3, (78, 188, 206))
             data.SetCustomColour(4, (230, 110, 1))        
-            data.SetColour(wx.Colour(self.colors[i][0]*255, self.colors[i][1]*255, self.colors[i][2]*255))
+            data.SetColour(wx.Colour(self.color[i][0]*255, self.color[i][1]*255, self.color[i][2]*255))
             dlg = wx.ColourDialog(self, data)
            
             if dlg.ShowModal() == wx.ID_OK:
                 res = dlg.GetColourData().Colour
-                self.colors[i] = (res[0]/255.0, res[1]/255.0, res[2]/255.0)
+                self.color[i] = (res[0]/255.0, res[1]/255.0, res[2]/255.0)
                 self.draw_figure()
                 
         else:
@@ -771,10 +772,10 @@ class MainFrame(wx.Frame):
                 dlg = MergeWindow(None, -1, 'Daten verbinden')
                 
                 if dlg.ShowModal() == wx.ID_CANCEL:
-                    i = len(self.newname) - 1
-                    del self.colors[i]
-                    del self.newname[i]
-                    del self.oldname[i]
+                    i = len(self.name) - 1
+                    del self.color[i]
+                    del self.name[i]
+                    del self.filename[i]
                     del self.comment[i]
                     del self.date[i]
                     del self.wavelength[i]
@@ -786,7 +787,7 @@ class MainFrame(wx.Frame):
                     del self.range[i]
                     del self.step[i]
                     del self.time[i]
-                    del self.number[i]
+                    del self.points[i]
                     del self.data[i]
                     del self.checked[i]
                     self.update_list()
@@ -805,10 +806,10 @@ class MainFrame(wx.Frame):
             dlg = CorrectWindow(None, -1, 'XRR-Daten korrigieren')
                 
             if dlg.ShowModal() == wx.ID_CANCEL:
-                i = len(self.newname) - 1
-                del self.colors[i]
-                del self.newname[i]
-                del self.oldname[i]
+                i = len(self.name) - 1
+                del self.color[i]
+                del self.name[i]
+                del self.filename[i]
                 del self.comment[i]
                 del self.date[i]
                 del self.wavelength[i]
@@ -820,7 +821,7 @@ class MainFrame(wx.Frame):
                 del self.range[i]
                 del self.step[i]
                 del self.time[i]
-                del self.number[i]
+                del self.points[i]
                 del self.data[i]
                 del self.checked[i]
                 self.update_list()
@@ -845,8 +846,8 @@ class MainFrame(wx.Frame):
         if dodelete:
             for i in arange(len(self.checked)-1, -0.5, -1, dtype=int):
                 if self.list.IsSelected(i):
-                    del self.newname[i]
-                    del self.oldname[i]
+                    del self.name[i]
+                    del self.filename[i]
                     del self.comment[i]
                     del self.date[i]
                     del self.wavelength[i]
@@ -858,15 +859,15 @@ class MainFrame(wx.Frame):
                     del self.range[i]
                     del self.step[i]
                     del self.time[i]
-                    del self.number[i]
+                    del self.points[i]
                     del self.data[i]
                     del self.checked[i]
-                    del self.colors[i]
+                    del self.color[i]
             self.update_list()
             self.draw_figure()
         
     def on_open_file(self, event):
-        file_choices = "Daten-Typen (*.njc, *.raw, *.udf, *.x00, *.txt, *.dat)|*.njc;*.raw;*.udf;*.x00;*.txt;*.dat|Seifert (*.njc)|*.njc|Bruker (*.raw)|*.raw|Philips (*.udf)|*.udf|Philips (*.x00)|*.x00|TXT-Datei (*.txt)|*.txt|DAT-Datei (*.dat)|*.dat|Alle Dateien (*.*)|*.*"
+        file_choices = "Daten-Typen (*.dat, *.njc, *.raw, *.txt, *.udf, *.val, *.x00)|*.dat;*.njc;*.raw;*.txt;*.udf;*.val;*.x00|Seifert (*.njc)|*.njc|Bruker RAW Version 3 (*.raw)|*.raw|Philips (*.udf)|*.udf|Seifert (*.val)|*.val|Philips (*.x00)|*.x00|TXT-Datei (*.txt)|*.txt|DAT-Datei (*.dat)|*.dat|Alle Dateien (*.*)|*.*"
         dlg = wx.FileDialog(self, "Datei laden", "", "", file_choices, wx.OPEN|wx.MULTIPLE)
         
         if dlg.ShowModal() == wx.ID_OK:
@@ -876,11 +877,7 @@ class MainFrame(wx.Frame):
             for i in arange(len(paths)):
                 filename = filenames[i]
                 path = paths[i]
-            
-                oldname = filename
-                newname, extension = os.path.splitext(filename)
-                ext = extension.lstrip('.').lower()
-                data = [[0,1],[0,1]]
+                ext = os.path.splitext(filename)[-1].lstrip('.').lower()
                 
                 if ext == 'njc':
                     fd = open(path, 'rb')
@@ -912,24 +909,20 @@ class MainFrame(wx.Frame):
                     fd.read(offset)
                     data64 = fromfile(file=fd, dtype=float64)
                     fd.close()
-                    
+
+                    wavelength = str(data64[2])
                     first = round(data64[20], 6)
                     range = round(data64[21], 6) - first
                     step = round(data32[44], 6)
-                    number = int(round(range / step)) + 1
+                    points = int(round(range / step)) + 1
                     time = round(data32[46], 6)
 
-                    angle = first + step * arange(number)
-                    intens = data32[-40-number:-40] * time
+                    angle = first + step * arange(points)
+                    intens = data32[-40-points:-40] * time
                     data = vstack((angle, intens)).T
-        
-                    date = '???'
-                    wavelength = str(data64[2])
-                    omega = '???'
-                    twotheta = '???'
-                    scantype = '???'
-                    scanaxis = '???'
-                                   
+                    
+                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), comm=comment, wl=wavelength, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
+                    
                 elif ext == 'raw':
                     fd = open(path, 'rb')
                     data_32 = fromfile(file=fd, dtype=float32)
@@ -938,51 +931,88 @@ class MainFrame(wx.Frame):
                     data_64 = fromfile(file=fd, dtype=float64)
                     fd.close()
                     fd = open(path, 'rb')
+                    fd.read(4)
+                    data_64_shift = fromfile(file=fd, dtype=float64)
+                    fd.close()
+                    fd = open(path, 'rb')
                     data_i = fromfile(file=fd, dtype=int32)
                     fd.close()
                     fd = open(path, 'rb')
                     data_s = fromfile(file=fd, dtype='a326')
                     fd.close()
-                                                                     
-                    comment = data_s[1][:160]
+                    
+                    numberofscans = data_i[3]
+                    
                     date = data_s[0][16:24] + ', ' + data_s[0][26:34]
+                    comment = data_s[1][:220].strip()
                     wavelength = str(data_64[77])
-                    omega = str(data_64[90])
-                    twotheta = str(data_64[91])
-
-                    if data_i[227] == 0:
-                        scantype = 'Locked Coupled'
-                        scanaxis = '2Theta'
-                    elif data_i[227] == 1:
-                        scantype = 'Unlocked Coupled'
-                        scanaxis = '2Theta'
-                    elif data_i[227] == 2:
-                        scantype = 'Detector Scan'
-                        scanaxis = '2Theta'
-                    elif data_i[227] == 3:
-                        scantype = 'Rocking Curve'
-                        scanaxis = 'Omega'
-                    elif data_i[227] == 9999:
-                        scantype = 'Tube Scan'
-                        scanaxis = 'Omega'
+                    offset = 712
+                    
+                    omega = []
+                    twotheta = []
+                    scantype = []
+                    scanaxis = []
+                    first = []
+                    range = []
+                    step = []
+                    time = []
+                    points = []
+                    data = []
+                
+                    for i in arange(numberofscans):
+                        p = data_i[(offset+4)/4]
+                        drive = data_i[(offset+196)/4]
+                        supplement = data_i[(offset+256)/4]
+                        
+                        if mod(offset, 8) == 0:
+                            omega.append(str(data_64[(offset+8)/8]))
+                            twotheta.append(str(data_64[(offset+16)/8]))
+                            s = round(data_64[(offset+176)/8], 6)
+                        else:
+                            omega.append(str(data_64_shift[(offset+8)/8]))
+                            twotheta.append(str(data_64_shift[(offset+16)/8]))
+                            s = round(data_64_shift[(offset+176)/8], 6)
+                            
+                        if drive == 0:
+                            scantype.append('Locked Coupled')
+                            scanaxis.append('2Theta')
+                        elif drive == 1:
+                            scantype.append('Unlocked Coupled')
+                            scanaxis.append('2Theta')
+                        elif drive == 2:
+                            scantype.append('Detector Scan')
+                            scanaxis.append('2Theta')
+                        elif drive == 3:
+                            scantype.append('Rocking Curve')
+                            scanaxis.append('Omega')
+                        elif drive == 9999:
+                            scantype.append('Tube Scan')
+                            scanaxis.append('Omega')
+                        else:
+                            scantype.append('???')
+                            scanaxis.append('???')
+                        
+                        if scanaxis == 'Omega':
+                            f = round(float(omega[-1]), 6)
+                        else:
+                            f = round(float(twotheta[-1]), 6)
+                        
+                        first.append(f)
+                        range.append(s * (p - 1))
+                        step.append(s)
+                        time.append(round(data_32[(offset+192)/4], 6))
+                        points.append(p)
+                        
+                        angle = f + s * arange(p)
+                        index = (offset + 304 + supplement) / 4
+                        offset = offset + 304 + supplement + p * 4
+                        intens = data_32[index:index+p]
+                        data.append(vstack((angle, intens)).T)
+                    
+                    if numberofscans == 1:
+                        self.add_scan(numberofscans, filename, date, comment, wavelength, omega[0], twotheta[0], scantype[0], scanaxis[0], first[0], range[0], step[0], time[0], points[0], data[0])
                     else:
-                        scantype = '???'
-                        scanaxis = '???'
-                    
-                    if scanaxis == 'Omega':
-                        first = round(data_64[90], 6)
-                    else:
-                        first = round(data_64[91], 6)
-                    
-                    step = round(data_64[111], 6)
-                    time = round(data_32[226], 6)
-                    number = data_i[179]
-                    range = step * (number - 1)
-                    
-                    angle = first + step * arange(number)
-                    index = 254 + data_i[242] / 4
-                    intens = data_32[index:index+number]          
-                    data = vstack((angle, intens)).T
+                        self.add_scan(numberofscans, filename, date, comment, wavelength, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
                     
                 elif ext == 'udf':
                     f = open(path, 'r')
@@ -1009,7 +1039,7 @@ class MainFrame(wx.Frame):
                             step = float(line.split(',')[1])
                         if "ScanStepTime" in line:
                             time = float(line.split(',')[1])
-                        if data_start == 1:
+                        if data_start:
                             for x in line.rstrip('/\n').split(','):
                                 if not x.strip() == '':
                                     intens.append(x.strip())
@@ -1018,21 +1048,59 @@ class MainFrame(wx.Frame):
                     f.close()
                     
                     wavelength = str((l1 + l2*ratio) / (1 + ratio))
-                    omega = '???'
-                    twotheta = '???'
-                    scanaxis = '???'
-                    number = int(round(range / step)) + 1
+                    points = int(round(range / step)) + 1
                     
-                    angle = first + step * arange(number)
+                    angle = first + step * arange(points)
                     data = vstack((angle, float_(intens))).T
+                    
+                    self.add_scan(1, filename, date, comment, wavelength, '???', '???', scantype, '???', first, range, step, time, points, data)
+                    
+                elif ext == 'val':
+                    seen_intens = 0
+                    fn = open(path, 'r')
+                    Intensity = array([])
+                    while True:
+                        zeile = fn.readline()
+                        if not zeile: 
+                            break
+                        if 'FilePar' in zeile:
+                            comment1 = fn.readline().strip()
+                            comment2 = fn.readline().strip()
+                            continue
+                        if 'BerPar01' in zeile:
+                            omega = fn.readline()
+                            twotheta = fn.readline()
+                            first = float(twotheta)
+                            stop = float(fn.readline())
+                            step = float(fn.readline())
+                            fn.readline()
+                            time = float(fn.readline())
+                            fn.readline()
+                            points = float(fn.readline())
+                            continue
+                        if 'Intens' in zeile:
+                            seen_intens = 1
+                            continue
+                        if seen_intens:
+                            Intensity = append(Intensity, float(zeile))
+                    fn.close()
+                    
+                    if comment1 != '' and comment2 != '':
+                        comment = comment1 + ' - ' + comment2
+                    else:
+                        comment = comment1 + comment2
+                    
+                    range = stop - first
+                    angle = linspace(first, stop, points)
+                    data = vstack((angle, Intensity * time)).T
+                    
+                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), comm=comment, om=omega, tt=twotheta, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
                     
                 elif ext == 'x00':
                     f = open(path, 'r')
                     header_length = 1
                     
                     for line in f:
-                        # if "FileName" in line:
-                            # oldname = line.split()[1]
                         if "Sample" in line:
                             comment = line.split()[1]
                         if "FileDateTime" in line:
@@ -1056,41 +1124,29 @@ class MainFrame(wx.Frame):
                         if "TimePerStep" in line:
                             time = float(line.split()[1])
                         if "NrOfData" in line:
-                            number = int(line.split()[1])
+                            points = int(line.split()[1])
                         if "ScanData" in line:
                             break
                         else:
                             header_length += 1
                     f.close()
                     
-                    angle = first + step * arange(number)
+                    angle = first + step * arange(points)
                     intens = loadtxt(path, skiprows=header_length) * time
                     data = vstack((angle, intens)).T
+                    
+                    self.add_scan(1, filename, date, comment, wavelength, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
                 
                 else:
-                    comment = '???'
-                    date = '???'
-                    wavelength = '???'
-                    omega = '???'
-                    twotheta = '???'
-                    scantype = '???'
-                    scanaxis = '???'
-                    time = 0.0
-                    first = 0.0
-                    range = 0.0
-                    step = 0.0
-                    number = 0.0
-                    
                     try:
                         use_cps = 0
+                        time = 0
                         header_length = 0
                         
                         f = open(path, 'r')
                         
                         for line in f:
                             splitting = line.lstrip(line.split(': ')[0] + ': ').strip()
-                            # if "Original name:" in line:
-                                # oldname = splitting
                             if "Comment:" in line:
                                 comment = splitting
                             if "Original date:" in line:
@@ -1121,40 +1177,72 @@ class MainFrame(wx.Frame):
                         first = data[0,0]
                         range = data[-1,0] - data[0,0]
                         step = data[1,0] - data[0,0]
-                        number = len(data[:,0])
+                        points = len(data[:,0])
                         
                         if use_cps and time != 0:
                             data[:,1] = data[:,1] * time
+                        
+                        try:
+                            self.add_scan(1, filename, date, comment, wavelength, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
+                        except:
+                            self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), fst=first, rng=range, stp=step, t=time, pts=points, d=data)
                             
                     except Exception as error:
                         wx.MessageBox('Beim Laden der Datei:\n\n' + path + '\n\ntrat folgender Fehler auf:\n\n' + str(error), 'Fehler beim Laden der Datei')
-                
-                if date == '???':
-                    date = strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path)))
-                
-                self.colors.append(self.defaultcolors[mod(len(self.newname), len(self.defaultcolors))])
-                self.newname.append(newname)
-                self.oldname.append(oldname)
-                self.comment.append(comment)
-                self.date.append(date)
-                self.wavelength.append(wavelength)
-                self.omega.append(omega)
-                self.twotheta.append(twotheta)
-                self.scantype.append(scantype)
-                self.scanaxis.append(scanaxis)
-                self.first.append(first)
-                self.range.append(range)
-                self.step.append(step)
-                self.time.append(time)
-                self.number.append(number)
-                self.data.append(data)
+                        
+    def add_scan(self, numberofscans=0, fname='???', dat='???', comm='???', wl='???', om='???', tt='???', stype='???', saxis='???', fst=0.0, rng=0.0, stp=0.0, t=0.0, pts=0, d=[[0],[1]]):
+        if numberofscans > 0:
+            name = os.path.splitext(fname)[0]
+            
+            if numberofscans == 1:
+                self.filename.append(fname)
+                self.name.append(name)
                 self.checked.append(1)
-                            
-                self.flash_status_message("%s geladen." % filename)
-                self.update_list()
-                self.draw_figure()
-
-        dlg.Destroy()
+                color = self.defaultcolors[self.lastcolor]
+                self.lastcolor = mod( self.lastcolor + 1, len(self.defaultcolors) )
+                
+                self.color.append(color)
+                self.date.append(dat)
+                self.comment.append(comm)
+                self.wavelength.append(wl)
+                self.omega.append(om)
+                self.twotheta.append(tt)
+                self.scantype.append(stype)
+                self.scanaxis.append(saxis)
+                self.first.append(fst)
+                self.range.append(rng)
+                self.step.append(stp)
+                self.time.append(t)
+                self.points.append(pts)
+                self.data.append(d)
+            
+            else:
+                for i in range(numberofscans):
+                    self.filename.append('%s - %03i' %(fname,i+1))
+                    self.name.append('%s - %03i' %(name,i+1))
+                    self.date.append(dat)
+                    self.comment.append(comm)
+                    self.wavelength.append(wl)
+                
+                self.checked.extend(ones(numberofscans, dtype=int))
+                color = self.defaultcolors[mod( arange(numberofscans) + self.lastcolor, len(self.defaultcolors) )]
+                self.lastcolor = mod( numberofscans + self.lastcolor + 1, len(self.defaultcolors) )
+                
+                self.color.extend(color)
+                self.omega.extend(om)
+                self.twotheta.extend(tt)
+                self.scantype.extend(stype)
+                self.scanaxis.extend(saxis)
+                self.first.extend(fst)
+                self.range.extend(rng)
+                self.step.extend(stp)
+                self.time.extend(t)
+                self.points.extend(pts)
+                self.data.extend(d)
+                
+            self.flash_status_message("%s geladen." %fname)
+            self.update_list()
+            self.draw_figure()
         
     def on_save_plot(self, event):
         file_choices = "Portable Network Graphics (*.png)|*.png|Encapsulated Postscript (*.eps)|*.eps|Portable Document Format (*.pdf)|*.pdf|Scalable Vector Graphics (*.svg)|*.svg"
@@ -1175,7 +1263,7 @@ class MainFrame(wx.Frame):
         
         while i > -1:
             file_choices = "TXT-Datei (*.txt)|*.txt|DAT-Datei (*.dat)|*.dat|Beliebiger Typ (*.*)|*.*"
-            filename = self.newname[i] + ".txt"
+            filename = self.name[i] + ".txt"
             dlg = wx.FileDialog(self, message="Daten speichern unter...", defaultFile=filename, wildcard=file_choices, style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
             
             if dlg.ShowModal() == wx.ID_OK:
@@ -1186,7 +1274,7 @@ class MainFrame(wx.Frame):
                 if self.cb_header.IsChecked():
                     f.write("----- Header information -------------------------------------------------------\n")
                     f.write("Current name: " + dlg.GetFilename() + "\n")
-                    f.write("Original name: " + self.oldname[i] + "\n")
+                    f.write("Original name: " + self.filename[i] + "\n")
                     f.write("Comment: " + self.comment[i] + "\n")
                     f.write("Original date: " + self.date[i] + "\n")
                     f.write("Wavelength: " + self.wavelength[i] + "\n")
@@ -1198,7 +1286,7 @@ class MainFrame(wx.Frame):
                     f.write("Scan range: " + str(self.range[i]) + "\n")
                     f.write("Step width: " + str(self.step[i]) + "\n")
                     f.write("Time per step: " + str(self.time[i]) + "\n")
-                    f.write("Number of points: " + str(self.number[i]) + "\n")
+                    f.write("Number of points: " + str(self.points[i]) + "\n")
                     f.write("--------------------------------------------------------------------------------\n\n")
                    
                 f.write("        Angle\t    Intensity\n")
@@ -1236,7 +1324,7 @@ class MainFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.5 - 18.07.2013
+        Version 0.5.1 - 02.08.2013
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()

@@ -1,3 +1,8 @@
+In version 0.5.1 following improvements were implemented:
+- Support for Bruker RAW Version 3 with multiple scans in one file.
+- Support for Seifert VAL file format.
+- Completely restructured file import.
+
 In version 0.5 following improvements were implemented:
 - Removed some bugs for raw and udf import as well as for log window.
 - Zooming, auto zooming and panning now implemented by left click and right click.
