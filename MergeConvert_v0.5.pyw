@@ -992,7 +992,7 @@ class MainFrame(wx.Frame):
                             scantype.append('???')
                             scanaxis.append('???')
                         
-                        if scanaxis == 'Omega':
+                        if scanaxis[-1] == 'Omega':
                             f = round(float(omega[-1]), 6)
                         else:
                             f = round(float(twotheta[-1]), 6)

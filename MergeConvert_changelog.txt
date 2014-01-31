@@ -1,3 +1,6 @@
+In version 0.5.2 following improvements were implemented:
+- Fixed a bug with import of Raw omega scans.
+
 In version 0.5.1 following improvements were implemented:
 - Support for Bruker RAW Version 3 with multiple scans in one file.
 - Support for Seifert VAL file format.
