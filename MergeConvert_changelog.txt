@@ -1,3 +1,8 @@
+In version 0.5.3 following improvements were implemented:
+- Added support for plotting of ICSD powder pattern tables.
+- Sorted import filters in open dialogue.
+- Removed title line within graph.
+
 In version 0.5.2 following improvements were implemented:
 - Fixed a bug with import of Raw omega scans.
 

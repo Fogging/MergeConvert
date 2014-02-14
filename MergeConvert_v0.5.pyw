@@ -5,7 +5,7 @@
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.5.1.
+# The present version is 0.5.3.
 
 import os, wx, sys
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
@@ -14,7 +14,7 @@ import matplotlib
 matplotlib.use('WXAgg')
 from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigCanvas, NavigationToolbar2WxAgg as NavigationToolbar
+from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigCanvas
     
 from pylab import append, arange, argwhere, array, exp, float_, int32, float32, float64, fromfile, linspace, loadtxt, log, mod, ones, pi, savetxt, sin, vstack, zeros
 from StringIO import StringIO
@@ -595,6 +595,9 @@ class MainFrame(wx.Frame):
                 checked += 1
                 if self.cb_cps.IsChecked() and self.time[i] != 0:
                     self.axes.plot(self.data[i][:,0], self.data[i][:,1]/self.time[i], label=self.filename[i], color=self.color[i])
+                elif self.step[i] == 0:
+                    self.axes.plot(self.data[i][:,0], self.data[i][:,1], '.', label=self.filename[i], color=self.color[i])
+                    self.axes.vlines(self.data[i][:,0], [0.1], self.data[i][:,1], color=self.color[i])
                 else:
                     self.axes.plot(self.data[i][:,0], self.data[i][:,1], label=self.filename[i], color=self.color[i])
         
@@ -605,13 +608,6 @@ class MainFrame(wx.Frame):
             prop = matplotlib.font_manager.FontProperties(size=8) 
             self.axes.legend(loc=0, prop=prop)
         
-        x = len(self.filename)
-        if x == 1:
-            titeltext = 'Plot of X-ray diffraction data (' + str(checked) + ' of ' + str(x) + ' dataset selected)'
-        else:
-            titeltext = 'Plot of X-ray diffraction data (' + str(checked) + ' of ' + str(x) + ' datasets selected)'
-        self.titel = self.axes.set_title(titeltext, fontsize=10)
-               
         self.axes.tick_params(axis='both', labelsize=8)
         self.axes.set_xlabel('Angle (deg)', fontsize=10)
         
@@ -702,11 +698,9 @@ class MainFrame(wx.Frame):
         try:
             # self.fig.tight_layout(pad=1.0)
             x, y = self.fig.get_size_inches()
-            self.fig.subplots_adjust(left=0.8/x, right=1-0.2/x, bottom=0.4/y, top=1-0.35/y)
-            self.titel.set_position((0.5, 1+0.05/y))
+            self.fig.subplots_adjust(left=0.8/x, right=1-0.2/x, bottom=0.4/y, top=1-0.15/y)
         except Exception as error:
             return
-            # print error
     
     def on_CheckItem(self, index, flag):
         if self.list.IsChecked(index):
@@ -867,7 +861,7 @@ class MainFrame(wx.Frame):
             self.draw_figure()
         
     def on_open_file(self, event):
-        file_choices = "Daten-Typen (*.dat, *.njc, *.raw, *.txt, *.udf, *.val, *.x00)|*.dat;*.njc;*.raw;*.txt;*.udf;*.val;*.x00|Seifert (*.njc)|*.njc|Bruker RAW Version 3 (*.raw)|*.raw|Philips (*.udf)|*.udf|Seifert (*.val)|*.val|Philips (*.x00)|*.x00|TXT-Datei (*.txt)|*.txt|DAT-Datei (*.dat)|*.dat|Alle Dateien (*.*)|*.*"
+        file_choices = "Daten-Typen (*.raw, *.udf, *.x00, *.njc, *.val, *.dat, *.txt)|*.raw;*.udf;*.x00;*.njc;*.val;*.dat;*.txt|Bruker RAW Version 3 (*.raw)|*.raw|Philips (*.udf)|*.udf|Philips (*.x00)|*.x00|Seifert (*.njc)|*.njc|Seifert (*.val)|*.val|DAT-Datei (*.dat)|*.dat|TXT-Datei (*.txt)|*.txt|ICSD Powder Pattern Table (*.txt)|*.txt|Alle Dateien (*.*)|*.*"
         dlg = wx.FileDialog(self, "Datei laden", "", "", file_choices, wx.OPEN|wx.MULTIPLE)
         
         if dlg.ShowModal() == wx.ID_OK:
@@ -1140,6 +1134,7 @@ class MainFrame(wx.Frame):
                 else:
                     try:
                         use_cps = 0
+                        ICSD_Pattern = 0
                         time = 0
                         header_length = 0
                         
@@ -1165,6 +1160,8 @@ class MainFrame(wx.Frame):
                                 time = float(splitting)
                             if "cps" in line:
                                 use_cps = 1
+                            if "H	K	L	2THETA	D-VALUE	MULT	INTENSITY" in line:
+                                ICSD_Pattern = 1
                                 
                             try:
                                 data = loadtxt(path, skiprows=header_length)
@@ -1174,9 +1171,14 @@ class MainFrame(wx.Frame):
                         
                         f.close()
                         
+                        if ICSD_Pattern:
+                            data = vstack((data[:,3], data[:,6])).T
+                            step = 0
+                        else:
+                            step = data[1,0] - data[0,0]
+                            
                         first = data[0,0]
                         range = data[-1,0] - data[0,0]
-                        step = data[1,0] - data[0,0]
                         points = len(data[:,0])
                         
                         if use_cps and time != 0:
@@ -1313,7 +1315,8 @@ class MainFrame(wx.Frame):
     def on_about(self, event):
         msg = """Anzeige, Konvertierung und Verbinden von Diffraktometer-Dateien:
         
-        - Laden einer oder mehrerer njc-, raw-, udf-, x00-, txt- oder dat-Dateien
+        - Laden einer oder mehrerer Dateien
+        - Formate: raw (V3), udf, x00, njc, val, dat, txt
         - Datenanzeige per Grafik
         - Daten und Grafik speichern
         - Counts pro Sekunde oder Counts
@@ -1321,10 +1324,11 @@ class MainFrame(wx.Frame):
         - Kopfdaten mitspeichern
         - Farbe wechseln
         - Daten verbinden
+        - XRR-Korrektur bei kleiner Probe
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.5.1 - 02.08.2013
+        Version 0.5.3 - 14.02.2014
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
