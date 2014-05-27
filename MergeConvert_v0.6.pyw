@@ -1,11 +1,11 @@
 ﻿#!/usr/bin/env python
 
-# Copyright 2013 by Hartmut Stoecker
+# Copyright 2014 by Hartmut Stoecker
 # Contact: hartmut.stoecker@physik.tu-freiberg.de
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.5.3.
+# The present version is 0.6.
 
 import os, wx, sys
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
@@ -16,10 +16,11 @@ from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigCanvas
     
-from pylab import append, arange, argwhere, array, exp, float_, int32, float32, float64, fromfile, linspace, loadtxt, log, mod, ones, pi, savetxt, sin, vstack, zeros
+from pylab import append, arange, argwhere, array, cos, exp, float_, int32, float32, float64, fromfile, linspace, loadtxt, log, mod, ones, pi, savetxt, sin, vstack, zeros
 from StringIO import StringIO
 from time import gmtime, strftime
 from scipy.optimize import leastsq
+from copy import deepcopy
 
 
 class CheckListCtrl(wx.ListCtrl, CheckListCtrlMixin):
@@ -60,10 +61,11 @@ class MergeWindow(wx.Dialog):
         self.name.Bind(wx.EVT_TEXT_ENTER, self.do_merge)
         
         self.okButton = wx.Button(self.panel, wx.ID_OK, 'OK', size=(90, 25))
-        self.Bind(wx.EVT_BUTTON, self.on_OK, self.okButton)
+        self.Bind(wx.EVT_BUTTON, self.onOK, self.okButton)
         self.SetAffirmativeId(wx.ID_OK)
 
         self.closeButton = wx.Button(self.panel, wx.ID_CANCEL, 'Abbrechen', size=(90, 25))
+        self.Bind(wx.EVT_BUTTON, self.onClose, self.closeButton)
         self.SetEscapeId(wx.ID_CANCEL)
         
         flags = wx.ALIGN_CENTER | wx.ALL | wx.ALIGN_CENTER_VERTICAL
@@ -99,11 +101,6 @@ class MergeWindow(wx.Dialog):
             self.value = float(raw_value)
         except ValueError:
             self.faktor.ChangeValue(str(self.value))
-            
-    def on_OK(self, event):
-        self.do_merge(event)
-        self.SetReturnCode(wx.ID_OK)
-        self.Destroy()
             
     def do_merge(self, event, append=0):
         angle1 = app.frame.data[self.a][:,0]
@@ -185,7 +182,7 @@ class MergeWindow(wx.Dialog):
             
             self.SetReturnCode(wx.ID_CANCEL)
             self.Destroy()
-            wx.MessageBox('Verbinden dieser Daten nicht erfolgreich!','Fehler')
+            wx.MessageBox('Verbinden dieser Daten nicht erfolgreich!', 'Fehler', style=wx.ICON_ERROR)
         
         if success:
             self.angle = angle
@@ -196,34 +193,31 @@ class MergeWindow(wx.Dialog):
             else:
                 self.replace_data()
             
-            app.frame.update_list()
-            app.frame.draw_figure()
-            
     def append_data(self):
-        app.frame.color.append(app.frame.defaultcolors[mod(len(app.frame.name), len(app.frame.defaultcolors))])
-        app.frame.name.append(os.path.splitext(self.name.GetValue())[0])
-        app.frame.filename.append(self.name.GetValue())
-        app.frame.comment.append(app.frame.filename[self.a] + ' + ' + app.frame.filename[self.b] + ' (skaliert auf ' + str(self.value) + ')')
-        app.frame.date.append(strftime("%d-%b-%Y, %H:%M:%S"))
-        app.frame.wavelength.append(app.frame.wavelength[self.a])
-        app.frame.omega.append(app.frame.omega[self.a])
-        app.frame.twotheta.append(app.frame.twotheta[self.a])
-        app.frame.scantype.append(app.frame.scantype[self.a])
-        app.frame.scanaxis.append(app.frame.scanaxis[self.a])
-        app.frame.first.append(self.angle[0])
-        app.frame.range.append(self.angle[-1] - self.angle[0])
-        app.frame.step.append(self.angle[1] - self.angle[0])
-        app.frame.time.append(min(app.frame.time[self.a], app.frame.time[self.b]))
-        app.frame.points.append(len(self.angle))
-        app.frame.data.append(vstack((self.angle, self.int)).T)
-        app.frame.checked.append(1)
+        filename = self.name.GetValue()
+        date = strftime("%d-%b-%Y, %H:%M:%S")
+        comment = app.frame.filename[self.a] + ' + ' + app.frame.filename[self.b] + ' (scaled to ' + str(self.value) + ')'
+        wavelength = app.frame.wavelength[self.a]
+        radius = app.frame.radius[self.a]
+        omega = app.frame.omega[self.a]
+        twotheta = app.frame.twotheta[self.a]
+        scantype = app.frame.scantype[self.a]
+        scanaxis = app.frame.scanaxis[self.a]
+        first = self.angle[0]
+        range = self.angle[-1] - self.angle[0]
+        step = self.angle[1] - self.angle[0]
+        time = min(app.frame.time[self.a], app.frame.time[self.b])
+        points = len(self.angle)
+        data = vstack((self.angle, self.int)).T
+        
+        app.frame.add_scan(1, filename, date, comment, wavelength, radius, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
         
     def replace_data(self):
         i = len(app.frame.name) - 1
-    
-        app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
+        
         app.frame.filename[i] = self.name.GetValue()
-        app.frame.comment[i] = app.frame.filename[self.a] + ' + ' + app.frame.filename[self.b] + ' (skaliert auf ' + str(self.value) + ')'
+        app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
+        app.frame.comment[i] = app.frame.filename[self.a] + ' + ' + app.frame.filename[self.b] + ' (scaled to ' + str(self.value) + ')'
         app.frame.date[i] = strftime("%d-%b-%Y, %H:%M:%S")
         app.frame.first[i] = self.angle[0]
         app.frame.range[i] = self.angle[-1] - self.angle[0]
@@ -232,6 +226,22 @@ class MergeWindow(wx.Dialog):
         app.frame.data[i] = vstack((self.angle, self.int)).T
         app.frame.checked[i] = 1
         
+        app.frame.update_list()
+        app.frame.draw_figure()
+        
+    def onOK(self, event):
+        self.do_merge(event)
+        self.SetReturnCode(wx.ID_OK)
+        self.Destroy()
+        
+    def onClose(self, event):
+        app.frame.remove_file(len(app.frame.name)-1)
+        app.frame.update_list()
+        app.frame.draw_figure()
+        
+        self.SetReturnCode(wx.ID_CANCEL)
+        self.Destroy()
+
 
 class CorrectWindow(wx.Dialog):
     """ Dialog to select XRR correction parameters. """
@@ -271,10 +281,11 @@ class CorrectWindow(wx.Dialog):
         self.name.Bind(wx.EVT_TEXT_ENTER, self.do_correct)
         
         self.okButton = wx.Button(self.panel, wx.ID_OK, 'OK', size=(90, 25))
-        self.Bind(wx.EVT_BUTTON, self.on_OK, self.okButton)
+        self.Bind(wx.EVT_BUTTON, self.onOK, self.okButton)
         self.SetAffirmativeId(wx.ID_OK)
 
         self.closeButton = wx.Button(self.panel, wx.ID_CANCEL, 'Abbrechen', size=(90, 25))
+        self.Bind(wx.EVT_BUTTON, self.onClose, self.closeButton)
         self.SetEscapeId(wx.ID_CANCEL)
         
         flags = wx.ALIGN_CENTER | wx.ALL | wx.ALIGN_CENTER_VERTICAL
@@ -324,11 +335,6 @@ class CorrectWindow(wx.Dialog):
         except ValueError:
             self.ss.ChangeValue(str(self.samplesize))
             
-    def on_OK(self, event):
-        self.do_correct(event)
-        self.SetReturnCode(wx.ID_OK)
-        self.Destroy()
-            
     def do_correct(self, event, append=0):
         if self.cb_tt.IsChecked():
             omega = self.angle / 2.0
@@ -344,34 +350,31 @@ class CorrectWindow(wx.Dialog):
         else:
             self.replace_data()
         
-        app.frame.update_list()
-        app.frame.draw_figure()
-            
     def append_data(self):
-        app.frame.color.append(app.frame.defaultcolors[mod(len(app.frame.name), len(app.frame.defaultcolors))])
-        app.frame.name.append(os.path.splitext(self.name.GetValue())[0])
-        app.frame.filename.append(self.name.GetValue())
-        app.frame.comment.append(app.frame.filename[self.a] + ' (korrigiert mit Strahl = ' + str(self.beamsize) + ' mm und Probe = ' + str(self.samplesize) + ' mm)')
-        app.frame.date.append(strftime("%d-%b-%Y, %H:%M:%S"))
-        app.frame.wavelength.append(app.frame.wavelength[self.a])
-        app.frame.omega.append(app.frame.omega[self.a])
-        app.frame.twotheta.append(app.frame.twotheta[self.a])
-        app.frame.scantype.append(app.frame.scantype[self.a])
-        app.frame.scanaxis.append(app.frame.scanaxis[self.a])
-        app.frame.first.append(self.angle[0])
-        app.frame.range.append(self.angle[-1] - self.angle[0])
-        app.frame.step.append(self.angle[1] - self.angle[0])
-        app.frame.time.append(app.frame.time[self.a])
-        app.frame.points.append(len(self.angle))
-        app.frame.data.append(vstack((self.angle, self.res)).T)
-        app.frame.checked.append(1)
+        filename = self.name.GetValue()
+        date = strftime("%d-%b-%Y, %H:%M:%S")
+        comment = app.frame.filename[self.a] + ' - Corrected using beam size ' + str(self.beamsize) + ' mm and sample size ' + str(self.samplesize) + ' mm'
+        wavelength = app.frame.wavelength[self.a]
+        radius = app.frame.radius[self.a]
+        omega = app.frame.omega[self.a]
+        twotheta = app.frame.twotheta[self.a]
+        scantype = app.frame.scantype[self.a]
+        scanaxis = app.frame.scanaxis[self.a]
+        first = self.angle[0]
+        range = self.angle[-1] - self.angle[0]
+        step = self.angle[1] - self.angle[0]
+        time = app.frame.time[self.a]
+        points = len(self.angle)
+        data = vstack((self.angle, self.res)).T
+        
+        app.frame.add_scan(1, filename, date, comment, wavelength, radius, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
         
     def replace_data(self):
         i = len(app.frame.name) - 1
-    
-        app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
+        
         app.frame.filename[i] = self.name.GetValue()
-        app.frame.comment[i] = app.frame.filename[self.a] + ' (korrigiert mit Strahl = ' + str(self.beamsize) + ' mm und Probe = ' + str(self.samplesize) + ' mm)'
+        app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
+        app.frame.comment[i] = app.frame.filename[self.a] + ' - Corrected using beam size ' + str(self.beamsize) + ' mm and sample size ' + str(self.samplesize) + ' mm'
         app.frame.date[i] = strftime("%d-%b-%Y, %H:%M:%S")
         app.frame.first[i] = self.angle[0]
         app.frame.range[i] = self.angle[-1] - self.angle[0]
@@ -380,7 +383,165 @@ class CorrectWindow(wx.Dialog):
         app.frame.data[i] = vstack((self.angle, self.res)).T
         app.frame.checked[i] = 1
         
+        app.frame.update_list()
+        app.frame.draw_figure()
+        
+    def onOK(self, event):
+        self.do_correct(event)
+        self.SetReturnCode(wx.ID_OK)
+        self.Destroy()
+        
+    def onClose(self, event):
+        app.frame.remove_file(len(app.frame.name)-1)
+        app.frame.update_list()
+        app.frame.draw_figure()
+        
+        self.SetReturnCode(wx.ID_CANCEL)
+        self.Destroy()
 
+        
+class ScaleWindow(wx.Dialog):
+    """ Dialogue to scale and shift datasets. """
+
+    def __init__(self, parent, id, title):
+        self.num = app.frame.list.GetSelectedItemCount()
+        
+        self.selected = []
+        i = app.frame.list.GetFirstSelected()
+        for j in arange(self.num):
+            self.selected.append(i)
+            i = app.frame.list.GetNextSelected(i)
+            
+        self.xshift = deepcopy(app.frame.xshift)
+        self.yshift = deepcopy(app.frame.yshift)
+        self.scale = deepcopy(app.frame.scale)
+        self.displace = deepcopy(app.frame.displace)
+        self.radius = deepcopy(app.frame.radius)
+            
+        height = 140 + 32 * self.num
+        
+        wx.Dialog.__init__(self, parent, id, title, size=(950, height))
+        
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        box = wx.StaticBox(self, -1, 'Parameter angeben', (5, 5), (930, height-85))
+        bsizer = wx.StaticBoxSizer(box, wx.VERTICAL)
+        
+        t1 = wx.StaticText(self, -1, ' ', size=(370,-1))
+        t2 = wx.StaticText(self, -1, ' x-Verschiebung', size=(100,-1))
+        t3 = wx.StaticText(self, -1, ' y-Verschiebung', size=(100,-1))
+        t4 = wx.StaticText(self, -1, ' Skalierung', size=(100,-1))
+        t5 = wx.StaticText(self, -1, u' Höhenfehler (mm)', size=(100,-1))
+        t6 = wx.StaticText(self, -1, ' Radius (mm)', size=(100,-1))
+        
+        hbox1 = wx.BoxSizer(wx.HORIZONTAL)
+        hbox1.Add(t1, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        hbox1.Add(t2, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        hbox1.Add(t3, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        hbox1.Add(t4, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        hbox1.Add(t5, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        hbox1.Add(t6, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        
+        bsizer.Add(hbox1, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        
+        for i in self.selected:
+            name = wx.StaticText(self, -1, app.frame.filename[i] + ':', size=(370,-1))
+            t_xshift = wx.TextCtrl(self, 10*i+1, str(app.frame.xshift[i]), style=wx.TE_PROCESS_ENTER, size=(100,20))
+            t_yshift = wx.TextCtrl(self, 10*i+2, str(app.frame.yshift[i]), style=wx.TE_PROCESS_ENTER, size=(100,20))
+            t_scale = wx.TextCtrl(self, 10*i+3, str(app.frame.scale[i]), style=wx.TE_PROCESS_ENTER, size=(100,20))
+            t_displace = wx.TextCtrl(self, 10*i+4, str(app.frame.displace[i]), style=wx.TE_PROCESS_ENTER, size=(100,20))
+            t_radius = wx.TextCtrl(self, 10*i+5, str(app.frame.radius[i]), style=wx.TE_PROCESS_ENTER, size=(100,20))
+            
+            t_xshift.Bind(wx.EVT_TEXT_ENTER, self.refresh)
+            t_yshift.Bind(wx.EVT_TEXT_ENTER, self.refresh)
+            t_scale.Bind(wx.EVT_TEXT_ENTER, self.refresh)
+            t_displace.Bind(wx.EVT_TEXT_ENTER, self.refresh)
+            t_radius.Bind(wx.EVT_TEXT_ENTER, self.refresh)
+
+            hbox1 = wx.BoxSizer(wx.HORIZONTAL)
+            hbox1.Add(name, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+            hbox1.Add(t_xshift, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+            hbox1.Add(t_yshift, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+            hbox1.Add(t_scale, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+            hbox1.Add(t_displace, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+            hbox1.Add(t_radius, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+            
+            bsizer.Add(hbox1, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        
+        bsizer.AddSpacer(5)
+
+        okButton = wx.Button(self, wx.ID_OK, 'OK', size=(100, 25))
+        self.Bind(wx.EVT_BUTTON, self.onOK, okButton)
+        refreshButton = wx.Button(self, -1, 'Aktualisieren', size=(100, 25))
+        self.Bind(wx.EVT_BUTTON, self.refresh, refreshButton)
+        closeButton = wx.Button(self, wx.ID_CANCEL, 'Abbrechen', size=(100, 25))
+        self.Bind(wx.EVT_BUTTON, self.onClose, closeButton)
+        
+        self.SetAffirmativeId(wx.ID_OK)
+        self.SetEscapeId(wx.ID_CANCEL)
+        
+        hbox3 = wx.BoxSizer(wx.HORIZONTAL)
+        hbox3.Add(okButton, 1)
+        hbox3.Add(refreshButton, 1, wx.LEFT, 5)
+        hbox3.Add(closeButton, 1, wx.LEFT, 5)
+
+        vbox.Add(bsizer, 0, border=7, flag = wx.ALIGN_CENTER | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        vbox.Add(hbox3, 1, border=7, flag = wx.ALIGN_CENTER | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        self.SetSizer(vbox)
+        
+    def onOK(self, event):
+        self.refresh(event)
+        self.SetReturnCode(wx.ID_OK)
+        self.Destroy()
+        
+    def refresh(self, event):
+        for i in self.selected:
+            raw_value = self.FindWindowById(10*i+1).GetValue().strip()
+            try:
+                app.frame.xshift[i] = float(raw_value)
+            except ValueError:
+                self.FindWindowById(10*i+1).ChangeValue(str(app.frame.xshift[i]))
+        
+            raw_value = self.FindWindowById(10*i+2).GetValue().strip()
+            try:
+                app.frame.yshift[i] = float(raw_value)
+            except ValueError:
+                self.FindWindowById(10*i+2).ChangeValue(str(app.frame.yshift[i]))
+        
+            raw_value = self.FindWindowById(10*i+3).GetValue().strip()
+            try:
+                app.frame.scale[i] = float(raw_value)
+            except ValueError:
+                self.FindWindowById(10*i+3).ChangeValue(str(app.frame.scale[i]))
+        
+            raw_value = self.FindWindowById(10*i+4).GetValue().strip()
+            try:
+                app.frame.displace[i] = float(raw_value)
+            except ValueError:
+                self.FindWindowById(10*i+4).ChangeValue(str(app.frame.displace[i]))
+        
+            raw_value = self.FindWindowById(10*i+5).GetValue().strip()
+            try:
+                app.frame.radius[i] = float(raw_value)
+            except ValueError:
+                self.FindWindowById(10*i+5).ChangeValue(str(app.frame.radius[i]))
+        
+        app.frame.update_list()
+        app.frame.draw_figure()
+        
+    def onClose(self, event):
+        app.frame.xshift = deepcopy(self.xshift)
+        app.frame.yshift = deepcopy(self.yshift)
+        app.frame.scale = deepcopy(self.scale)
+        app.frame.displace = deepcopy(self.displace)
+        app.frame.radius = deepcopy(self.radius)
+        
+        app.frame.update_list()
+        app.frame.draw_figure()
+        
+        self.SetReturnCode(wx.ID_CANCEL)
+        self.Destroy()
+            
+        
 class MainFrame(wx.Frame):
     """ The main frame of the application."""
     
@@ -403,6 +564,12 @@ class MainFrame(wx.Frame):
         self.time = []
         self.points = []
         self.data = []
+        self.xshift = []
+        self.yshift = []
+        self.scale = []
+        self.displace = []
+        self.radius = []
+        self.scaling = []
         
         self.savename = ''
         self.checked = []
@@ -421,11 +588,14 @@ class MainFrame(wx.Frame):
         menu_file = wx.Menu()
         m_load = menu_file.Append(-1, "&Datei laden...\tCtrl-O", "Daten aus Datei laden")
         self.Bind(wx.EVT_MENU, self.on_open_file, m_load)
-        m_delete = menu_file.Append(-1, "&Datei entfernen...\tCtrl-L", "Bestehende Datei entfernen")
+        m_delete = menu_file.Append(-1, "&Datei entfernen...\tCtrl-E", "Bestehende Datei entfernen")
         self.Bind(wx.EVT_MENU, self.on_delete_file, m_delete)
         m_color = menu_file.Append(-1, "&Farbe wechseln...\tCtrl-F", "Farbe wechseln")
         self.Bind(wx.EVT_MENU, self.on_color, m_color)
-        m_merge = menu_file.Append(-1, "&Daten verbinden...\tCtrl-M", "Daten verbinden")
+        menu_file.AppendSeparator()
+        m_scale = menu_file.Append(-1, "&Daten skalieren...\tCtrl-C", "Daten verbinden")
+        self.Bind(wx.EVT_MENU, self.on_scale, m_scale)
+        m_merge = menu_file.Append(-1, "&Daten verbinden...\tCtrl-V", "Daten verbinden")
         self.Bind(wx.EVT_MENU, self.on_merge, m_merge)
         m_correct = menu_file.Append(-1, "&XRR-Korrektur...\tCtrl-K", "XRR-Daten korrigieren")
         self.Bind(wx.EVT_MENU, self.on_correct, m_correct)
@@ -447,10 +617,7 @@ class MainFrame(wx.Frame):
         self.SetMenuBar(self.menubar)
 
     def create_main_panel(self):
-        """ Creates the main panel with all the controls on it:
-             * mpl canvas 
-             * mpl navigation toolbar
-             * Control panel for interaction
+        """ Creates the main panel with all the controls on it.
         """
         
         self.spWindow = wx.SplitterWindow(self)
@@ -461,7 +628,7 @@ class MainFrame(wx.Frame):
         
         # Create the mpl Figure and FigCanvas objects: 9x6 inches, 100 dots-per-inch
         self.dpi = 100
-        self.fig = Figure((9.1, 6), dpi=self.dpi)
+        self.fig = Figure((10, 6), dpi=self.dpi)
         self.canvas = FigCanvas(self.graphpanel, -1, self.fig)
         self.canvas.mpl_connect('motion_notify_event', self.on_UpdateCursor)
         self.canvas.mpl_connect('resize_event', self.on_Resize)
@@ -489,6 +656,9 @@ class MainFrame(wx.Frame):
         
         self.colorbutton = wx.Button(self.panel, -1, "Farbe\nwechseln", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_color, self.colorbutton)
+        
+        self.scalebutton = wx.Button(self.panel, -1, "Daten\nskalieren", size=(70,35))
+        self.Bind(wx.EVT_BUTTON, self.on_scale, self.scalebutton)
         
         self.mergebutton = wx.Button(self.panel, -1, "Daten\nverbinden", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_merge, self.mergebutton)
@@ -533,8 +703,9 @@ class MainFrame(wx.Frame):
         self.list.InsertColumn(2, "Endwinkel", width=70)
         self.list.InsertColumn(3, "Schrittweite", width=75)
         self.list.InsertColumn(4, "Messzeit", width=65)
-        self.list.InsertColumn(5, "Datum", width=120)
-        self.list.InsertColumn(6, "Kommentar", width=240)
+        self.list.InsertColumn(5, "Datum", width=130)
+        self.list.InsertColumn(6, "Kommentar", width=200)
+        self.list.InsertColumn(7, "Skalierung", width=120)
         
         # Layout with box sizers
         flags = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL
@@ -555,6 +726,7 @@ class MainFrame(wx.Frame):
         self.hbox.Add(self.loadbutton, 0, border=3, flag=flags)
         self.hbox.Add(self.deletebutton, 0, border=3, flag=flags)
         self.hbox.Add(self.colorbutton, 0, border=3, flag=flags)
+        self.hbox.Add(self.scalebutton, 0, border=3, flag=flags)
         self.hbox.Add(self.mergebutton, 0, border=3, flag=flags)
         self.hbox.Add(self.correctbutton, 0, border=3, flag=flags)
         self.hbox.Add(self.savetextbutton, 0, border=3, flag=flags)
@@ -583,7 +755,7 @@ class MainFrame(wx.Frame):
         # Since we have only one plot, we can use add_axes instead of add_subplot, but then the subplot configuration tool in the navigation toolbar wouldn't work.
         # self.axes = self.fig.add_axes([0, 0, 1, 1])
         self.axes = self.fig.add_subplot(111)
-        self.axes.locator_params(axis = 'x', nbins = 10)
+        self.axes.locator_params(axis = 'x', nbins = 15)
         self.axes.grid(self.cb_grid.IsChecked())
         
         self.rs1 = RectangleSelector(self.axes, self.on_Zoom, drawtype='box', button=1, minspanx=5, minspany=5, spancoords='pixels')
@@ -593,13 +765,16 @@ class MainFrame(wx.Frame):
         for i in arange(len(self.filename)):
             if self.list.IsChecked(i):
                 checked += 1
+                angle = self.data[i][:,0] + 180 / pi * self.displace[i] / self.radius[i] * cos(self.data[i][:,0] * pi / 360) + self.xshift[i]
+                intensity = self.data[i][:,1] * self.scale[i] + self.yshift[i]
+
                 if self.cb_cps.IsChecked() and self.time[i] != 0:
-                    self.axes.plot(self.data[i][:,0], self.data[i][:,1]/self.time[i], label=self.filename[i], color=self.color[i])
+                    self.axes.plot(angle, intensity/self.time[i], label=self.filename[i], color=self.color[i])
                 elif self.step[i] == 0:
-                    self.axes.plot(self.data[i][:,0], self.data[i][:,1], '.', label=self.filename[i], color=self.color[i])
-                    self.axes.vlines(self.data[i][:,0], [0.1], self.data[i][:,1], color=self.color[i])
+                    self.axes.plot(angle, intensity, '.', label=self.filename[i], color=self.color[i])
+                    self.axes.vlines(angle, [0.1], intensity, color=self.color[i])
                 else:
-                    self.axes.plot(self.data[i][:,0], self.data[i][:,1], label=self.filename[i], color=self.color[i])
+                    self.axes.plot(angle, intensity, label=self.filename[i], color=self.color[i])
         
         if self.cb_log.IsChecked() and self.data != []:
             self.axes.set_yscale('log')
@@ -609,12 +784,12 @@ class MainFrame(wx.Frame):
             self.axes.legend(loc=0, prop=prop)
         
         self.axes.tick_params(axis='both', labelsize=8)
-        self.axes.set_xlabel('Angle (deg)', fontsize=10)
+        self.axes.set_xlabel('Winkel (deg)', fontsize=10)
         
         if self.cb_cps.IsChecked():
-            self.axes.set_ylabel('Intensity (cps)', fontsize=10)
+            self.axes.set_ylabel(u'Intensität (cps)', fontsize=10)
         else:
-            self.axes.set_ylabel('Intensity (counts)', fontsize=10)
+            self.axes.set_ylabel(u'Intensität (counts)', fontsize=10)
         
         self.on_Resize('')
         self.canvas.draw()
@@ -712,6 +887,7 @@ class MainFrame(wx.Frame):
         
     def update_list(self):
         self.list.DeleteAllItems()
+        self.scaling = []
     
         for i in arange(len(self.filename)):
             self.list.InsertStringItem(i, self.filename[i])
@@ -721,6 +897,21 @@ class MainFrame(wx.Frame):
             self.list.SetStringItem(i, 4, str(self.time[i]))
             self.list.SetStringItem(i, 5, self.date[i])
             self.list.SetStringItem(i, 6, self.comment[i])
+            
+            scalecomment = ''
+            if self.xshift[i] != 0:
+                scalecomment += 'x-shift %s deg' %self.xshift[i]
+            if self.yshift[i] != 0:
+                if scalecomment != '': scalecomment += ', '
+                scalecomment += 'y-shift %s counts' %self.yshift[i]
+            if self.scale[i] != 1.0: 
+                if scalecomment != '': scalecomment += ', '
+                scalecomment += 'scaling %s' %self.scale[i]
+            if self.displace[i] != 0:
+                if scalecomment != '': scalecomment += ', '
+                scalecomment += 'height error %s mm (radius %s mm)' %(self.displace[i], self.radius[i])
+            self.list.SetStringItem(i, 7, scalecomment)
+            self.scaling.append(scalecomment)
         
         self.redraw = 0
         for i in arange(len(self.filename)):
@@ -732,9 +923,7 @@ class MainFrame(wx.Frame):
         self.draw_figure()
    
     def on_color(self, event):
-        x = self.list.GetSelectedItemCount()
-        
-        if x == 1:
+        if self.list.GetSelectedItemCount() == 1:
             i = self.list.GetFirstSelected()
             
             data = wx.ColourData()
@@ -753,8 +942,15 @@ class MainFrame(wx.Frame):
                 self.draw_figure()
                 
         else:
-            wx.MessageBox('Bitte genau einen Datensatz in der Liste markieren!','Fehler')
-        
+            wx.MessageBox('Bitte genau einen Datensatz in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
+
+    def on_scale(self, event):
+        if self.list.GetSelectedItemCount() > 0:
+            dlg = ScaleWindow(None, -1, 'Daten skalieren')
+            dlg.ShowModal()
+        else:
+            wx.MessageBox('Bitte mindestens einen Datensatz in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
+            
     def on_merge(self, event):
         x = self.list.GetSelectedItemCount()
         
@@ -763,73 +959,27 @@ class MainFrame(wx.Frame):
             j = self.list.GetNextSelected(i)
             
             if (self.step[i] - self.step[j]) < 1e-7:
-                dlg = MergeWindow(None, -1, 'Daten verbinden')
-                
-                if dlg.ShowModal() == wx.ID_CANCEL:
-                    i = len(self.name) - 1
-                    del self.color[i]
-                    del self.name[i]
-                    del self.filename[i]
-                    del self.comment[i]
-                    del self.date[i]
-                    del self.wavelength[i]
-                    del self.omega[i]
-                    del self.twotheta[i]
-                    del self.scantype[i]
-                    del self.scanaxis[i]
-                    del self.first[i]
-                    del self.range[i]
-                    del self.step[i]
-                    del self.time[i]
-                    del self.points[i]
-                    del self.data[i]
-                    del self.checked[i]
-                    self.update_list()
-                    self.draw_figure()
-                
+                MergeWindow(None, -1, 'Daten verbinden').ShowModal()
             else:
-                wx.MessageBox('Bitte nur Dateien mit gleicher Schrittweite verbinden!','Fehler')
+                wx.MessageBox('Bitte nur Dateien mit gleicher Schrittweite verbinden!', 'Fehler', style=wx.ICON_ERROR)
             
         else:
-            wx.MessageBox('Bitte genau zwei Dateien in der Liste markieren!','Fehler')
+            wx.MessageBox('Bitte genau zwei Dateien in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
             
     def on_correct(self, event):
         x = self.list.GetSelectedItemCount()
         
         if x == 1:
-            dlg = CorrectWindow(None, -1, 'XRR-Daten korrigieren')
-                
-            if dlg.ShowModal() == wx.ID_CANCEL:
-                i = len(self.name) - 1
-                del self.color[i]
-                del self.name[i]
-                del self.filename[i]
-                del self.comment[i]
-                del self.date[i]
-                del self.wavelength[i]
-                del self.omega[i]
-                del self.twotheta[i]
-                del self.scantype[i]
-                del self.scanaxis[i]
-                del self.first[i]
-                del self.range[i]
-                del self.step[i]
-                del self.time[i]
-                del self.points[i]
-                del self.data[i]
-                del self.checked[i]
-                self.update_list()
-                self.draw_figure()
-            
+            CorrectWindow(None, -1, 'XRR-Daten korrigieren').ShowModal()
         else:
-            wx.MessageBox('Bitte genau einen Datensatz in der Liste markieren!','Fehler')
+            wx.MessageBox('Bitte genau einen Datensatz in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
        
     def on_delete_file(self, event):
         x = self.list.GetSelectedItemCount()
         dodelete = 0
         
         if x == 0:
-            wx.MessageBox('Bitte mindestens einen Datensatz in der Liste markieren!','Fehler')
+            wx.MessageBox('Bitte mindestens einen Datensatz in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
         elif x == 1:
             dodelete = 1
         else:
@@ -840,25 +990,34 @@ class MainFrame(wx.Frame):
         if dodelete:
             for i in arange(len(self.checked)-1, -0.5, -1, dtype=int):
                 if self.list.IsSelected(i):
-                    del self.name[i]
-                    del self.filename[i]
-                    del self.comment[i]
-                    del self.date[i]
-                    del self.wavelength[i]
-                    del self.omega[i]
-                    del self.twotheta[i]
-                    del self.scantype[i]
-                    del self.scanaxis[i]
-                    del self.first[i]
-                    del self.range[i]
-                    del self.step[i]
-                    del self.time[i]
-                    del self.points[i]
-                    del self.data[i]
-                    del self.checked[i]
-                    del self.color[i]
+                    self.remove_file(i)
             self.update_list()
             self.draw_figure()
+            
+    def remove_file(self, i):
+        del self.filename[i]
+        del self.name[i]
+        del self.color[i]
+        del self.date[i]
+        del self.comment[i]
+        del self.wavelength[i]
+        del self.omega[i]
+        del self.twotheta[i]
+        del self.scantype[i]
+        del self.scanaxis[i]
+        del self.first[i]
+        del self.range[i]
+        del self.step[i]
+        del self.time[i]
+        del self.points[i]
+        del self.data[i]
+        del self.xshift[i]
+        del self.yshift[i]
+        del self.scale[i]
+        del self.displace[i]
+        del self.radius[i]
+        del self.scaling[i]
+        del self.checked[i]
         
     def on_open_file(self, event):
         file_choices = "Daten-Typen (*.raw, *.udf, *.x00, *.njc, *.val, *.dat, *.txt)|*.raw;*.udf;*.x00;*.njc;*.val;*.dat;*.txt|Bruker RAW Version 3 (*.raw)|*.raw|Philips (*.udf)|*.udf|Philips (*.x00)|*.x00|Seifert (*.njc)|*.njc|Seifert (*.val)|*.val|DAT-Datei (*.dat)|*.dat|TXT-Datei (*.txt)|*.txt|ICSD Powder Pattern Table (*.txt)|*.txt|Alle Dateien (*.*)|*.*"
@@ -938,8 +1097,9 @@ class MainFrame(wx.Frame):
                     numberofscans = data_i[3]
                     
                     date = data_s[0][16:24] + ', ' + data_s[0][26:34]
-                    comment = data_s[1][:220].strip()
+                    comment = data_s[1][:220].strip(u'\x00')
                     wavelength = str(data_64[77])
+                    radius = data_32[141]
                     offset = 712
                     
                     omega = []
@@ -1004,9 +1164,9 @@ class MainFrame(wx.Frame):
                         data.append(vstack((angle, intens)).T)
                     
                     if numberofscans == 1:
-                        self.add_scan(numberofscans, filename, date, comment, wavelength, omega[0], twotheta[0], scantype[0], scanaxis[0], first[0], range[0], step[0], time[0], points[0], data[0])
+                        self.add_scan(numberofscans, filename, date, comment, wavelength, radius, omega[0], twotheta[0], scantype[0], scanaxis[0], first[0], range[0], step[0], time[0], points[0], data[0])
                     else:
-                        self.add_scan(numberofscans, filename, date, comment, wavelength, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
+                        self.add_scan(numberofscans, filename, date, comment, wavelength, radius, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
                     
                 elif ext == 'udf':
                     f = open(path, 'r')
@@ -1047,7 +1207,7 @@ class MainFrame(wx.Frame):
                     angle = first + step * arange(points)
                     data = vstack((angle, float_(intens))).T
                     
-                    self.add_scan(1, filename, date, comment, wavelength, '???', '???', scantype, '???', first, range, step, time, points, data)
+                    self.add_scan(1, filename, date, comment, wavelength, 100.0, '???', '???', scantype, '???', first, range, step, time, points, data)
                     
                 elif ext == 'val':
                     seen_intens = 0
@@ -1129,14 +1289,15 @@ class MainFrame(wx.Frame):
                     intens = loadtxt(path, skiprows=header_length) * time
                     data = vstack((angle, intens)).T
                     
-                    self.add_scan(1, filename, date, comment, wavelength, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
+                    self.add_scan(1, filename, date, comment, wavelength, 100.0, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
                 
                 else:
                     try:
                         use_cps = 0
                         ICSD_Pattern = 0
-                        time = 0
                         header_length = 0
+                        time = 0
+                        radius = 100.0
                         
                         f = open(path, 'r')
                         
@@ -1148,6 +1309,8 @@ class MainFrame(wx.Frame):
                                 date = splitting
                             if "Wavelength:" in line:
                                 wavelength = splitting
+                            if "Goniometer radius" in line:
+                                radius = splitting
                             if "Omega:" in line:
                                 omega = splitting
                             if "2Theta:" in line:
@@ -1185,14 +1348,14 @@ class MainFrame(wx.Frame):
                             data[:,1] = data[:,1] * time
                         
                         try:
-                            self.add_scan(1, filename, date, comment, wavelength, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
+                            self.add_scan(1, filename, date, comment, wavelength, radius, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
                         except:
                             self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), fst=first, rng=range, stp=step, t=time, pts=points, d=data)
                             
                     except Exception as error:
-                        wx.MessageBox('Beim Laden der Datei:\n\n' + path + '\n\ntrat folgender Fehler auf:\n\n' + str(error), 'Fehler beim Laden der Datei')
+                        wx.MessageBox('Beim Laden der Datei:\n\n' + path + '\n\ntrat folgender Fehler auf:\n\n' + str(error), 'Fehler beim Laden der Datei', style=wx.ICON_ERROR)
                         
-    def add_scan(self, numberofscans=0, fname='???', dat='???', comm='???', wl='???', om='???', tt='???', stype='???', saxis='???', fst=0.0, rng=0.0, stp=0.0, t=0.0, pts=0, d=[[0],[1]]):
+    def add_scan(self, numberofscans=0, fname='???', dat='???', comm='???', wl='???', rad=100.0, om='???', tt='???', stype='???', saxis='???', fst=0.0, rng=0.0, stp=0.0, t=0.0, pts=0, d=[[0],[1]]):
         if numberofscans > 0:
             name = os.path.splitext(fname)[0]
             
@@ -1200,13 +1363,19 @@ class MainFrame(wx.Frame):
                 self.filename.append(fname)
                 self.name.append(name)
                 self.checked.append(1)
+                self.xshift.append(0.0)
+                self.yshift.append(0.0)
+                self.scale.append(1.0)
+                self.displace.append(0.0)
+                
                 color = self.defaultcolors[self.lastcolor]
                 self.lastcolor = mod( self.lastcolor + 1, len(self.defaultcolors) )
-                
                 self.color.append(color)
+                
                 self.date.append(dat)
                 self.comment.append(comm)
                 self.wavelength.append(wl)
+                self.radius.append(rad)
                 self.omega.append(om)
                 self.twotheta.append(tt)
                 self.scantype.append(stype)
@@ -1225,12 +1394,18 @@ class MainFrame(wx.Frame):
                     self.date.append(dat)
                     self.comment.append(comm)
                     self.wavelength.append(wl)
+                    self.radius.append(rad)
                 
                 self.checked.extend(ones(numberofscans, dtype=int))
+                self.xshift.extend(zeros(numberofscans, dtype=float))
+                self.yshift.extend(zeros(numberofscans, dtype=float))
+                self.scale.extend(ones(numberofscans, dtype=float))
+                self.displace.extend(zeros(numberofscans, dtype=float))
+                
                 color = self.defaultcolors[mod( arange(numberofscans) + self.lastcolor, len(self.defaultcolors) )]
                 self.lastcolor = mod( numberofscans + self.lastcolor + 1, len(self.defaultcolors) )
-                
                 self.color.extend(color)
+                
                 self.omega.extend(om)
                 self.twotheta.extend(tt)
                 self.scantype.extend(stype)
@@ -1261,7 +1436,7 @@ class MainFrame(wx.Frame):
         i = self.list.GetFirstSelected()
         
         if i <= -1:
-            wx.MessageBox('Bitte mindestens einen Datensatz in der Liste markieren!','Fehler')
+            wx.MessageBox('Bitte mindestens einen Datensatz in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
         
         while i > -1:
             file_choices = "TXT-Datei (*.txt)|*.txt|DAT-Datei (*.dat)|*.dat|Beliebiger Typ (*.*)|*.*"
@@ -1277,9 +1452,15 @@ class MainFrame(wx.Frame):
                     f.write("----- Header information -------------------------------------------------------\n")
                     f.write("Current name: " + dlg.GetFilename() + "\n")
                     f.write("Original name: " + self.filename[i] + "\n")
-                    f.write("Comment: " + self.comment[i] + "\n")
+                    
+                    if self.scaling[i] == '':
+                        f.write("Comment: " + self.comment[i] + "\n")
+                    else:
+                        f.write("Comment: " + self.comment[i] + " - Modifications: " + self.scaling[i] + "\n")
+                    
                     f.write("Original date: " + self.date[i] + "\n")
                     f.write("Wavelength: " + self.wavelength[i] + "\n")
+                    f.write("Goniometer radius: " + str(self.radius[i]) + "\n")
                     f.write("Omega: " + self.omega[i] + "\n")
                     f.write("2Theta: " + self.twotheta[i] + "\n")
                     f.write("Scan type: " + self.scantype[i] + "\n")
@@ -1323,12 +1504,13 @@ class MainFrame(wx.Frame):
         - Logarithmische y-Achse
         - Kopfdaten mitspeichern
         - Farbe wechseln
+        - Daten skalieren
         - Daten verbinden
         - XRR-Korrektur bei kleiner Probe
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.5.3 - 14.02.2014
+        Version 0.6 - 27.05.2014
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
