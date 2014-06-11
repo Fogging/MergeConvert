@@ -1310,7 +1310,7 @@ class MainFrame(wx.Frame):
                             if "Wavelength:" in line:
                                 wavelength = splitting
                             if "Goniometer radius" in line:
-                                radius = splitting
+                                radius = float(splitting)
                             if "Omega:" in line:
                                 omega = splitting
                             if "2Theta:" in line:
