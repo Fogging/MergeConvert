@@ -1,11 +1,11 @@
 ﻿#!/usr/bin/env python
 
-# Copyright 2014 by Hartmut Stoecker
+# Copyright 2015 by Hartmut Stoecker
 # Contact: hartmut.stoecker@physik.tu-freiberg.de
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.6.
+# The present version is 0.7.
 
 import os, wx, sys
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
@@ -21,6 +21,8 @@ from StringIO import StringIO
 from time import gmtime, strftime
 from scipy.optimize import leastsq
 from copy import deepcopy
+from base64 import b64decode
+from zlib import decompress, MAX_WBITS
 
 
 class CheckListCtrl(wx.ListCtrl, CheckListCtrlMixin):
@@ -1020,7 +1022,7 @@ class MainFrame(wx.Frame):
         del self.checked[i]
         
     def on_open_file(self, event):
-        file_choices = "Daten-Typen (*.raw, *.udf, *.x00, *.njc, *.val, *.dat, *.txt)|*.raw;*.udf;*.x00;*.njc;*.val;*.dat;*.txt|Bruker RAW Version 3 (*.raw)|*.raw|Philips (*.udf)|*.udf|Philips (*.x00)|*.x00|Seifert (*.njc)|*.njc|Seifert (*.val)|*.val|DAT-Datei (*.dat)|*.dat|TXT-Datei (*.txt)|*.txt|ICSD Powder Pattern Table (*.txt)|*.txt|Alle Dateien (*.*)|*.*"
+        file_choices = "Daten-Typen (*.raw, *.brml, *.udf, *.x00, *.njc, *.val, *.dat, *.txt)|*.raw;*.brml;*.udf;*.x00;*.njc;*.val;*.dat;*.txt|Bruker RAW Version 3 (*.raw)|*.raw|Bruker BRML (*.brml)|*.brml|Philips (*.udf)|*.udf|Philips (*.x00)|*.x00|Seifert (*.njc)|*.njc|Seifert (*.val)|*.val|DAT-Datei (*.dat)|*.dat|TXT-Datei (*.txt)|*.txt|ICSD Powder Pattern Table (*.txt)|*.txt|Alle Dateien (*.*)|*.*"
         dlg = wx.FileDialog(self, "Datei laden", "", "", file_choices, wx.OPEN|wx.MULTIPLE)
         
         if dlg.ShowModal() == wx.ID_OK:
@@ -1168,6 +1170,42 @@ class MainFrame(wx.Frame):
                     else:
                         self.add_scan(numberofscans, filename, date, comment, wavelength, radius, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
                     
+                elif ext == 'brml':
+                    f = open(path, 'r')
+                    x = f.read()
+                    f.close()
+                    
+                    xx = x.split('<TypeDesc>BrukerAXS.Common.ExperimentV5.Experiment.Data.DataContainer</TypeDesc>')
+                    xxx = xx[1].split('<SerializedObject xsi:type="xsd:string">')
+                    xxxx = xxx[1].split('</SerializedObject>')
+                    
+                    y = b64decode(xxxx[0])
+                    z = decompress(y, MAX_WBITS|16)
+                    
+                    l = z.split('</Datum><Datum>')
+                    l[0] = l[0].split('<Datum>')[1]
+                    l[-1] = l[-1].split('</Datum>')[0]
+                    
+                    angle = []
+                    intens = []
+                    
+                    for line in l:
+                        values = line.split(',')
+                        angle.append(values[2])
+                        intens.append(values[-1])
+                    
+                    data = vstack((float_(angle), float_(intens))).T
+                    
+                    scantype = z.split('ScanName="')[1].split('"')[0]
+                    scanaxis = z.split('AxisName="')[1].split('"')[0]
+                    first = float(z.split('<Start>')[1].split('</Start>')[0])
+                    range = float(z.split('<Stop>')[1].split('</Stop>')[0]) - first
+                    step = float(z.split('<Increment>')[1].split('</Increment>')[0])
+                    time = float(z.split('<TimePerStep>')[1].split('</TimePerStep>')[0])
+                    points = float(z.split('<MeasurementPoints>')[1].split('</MeasurementPoints>')[0])
+                    
+                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), stype=scantype, saxis=scanaxis, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
+                
                 elif ext == 'udf':
                     f = open(path, 'r')
                     data_start = 0
@@ -1510,7 +1548,7 @@ class MainFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.6 - 27.05.2014
+        Version 0.7 - 12.05.2015
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
