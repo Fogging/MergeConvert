@@ -1080,95 +1080,136 @@ class MainFrame(wx.Frame):
                     
                 elif ext == 'raw':
                     fd = open(path, 'rb')
-                    data_32 = fromfile(file=fd, dtype=float32)
-                    fd.close()
-                    fd = open(path, 'rb')
-                    data_64 = fromfile(file=fd, dtype=float64)
-                    fd.close()
-                    fd = open(path, 'rb')
-                    fd.read(4)
-                    data_64_shift = fromfile(file=fd, dtype=float64)
-                    fd.close()
-                    fd = open(path, 'rb')
-                    data_i = fromfile(file=fd, dtype=int32)
-                    fd.close()
-                    fd = open(path, 'rb')
-                    data_s = fromfile(file=fd, dtype='a326')
+                    start = fd.read(7)
                     fd.close()
                     
-                    numberofscans = data_i[3]
-                    
-                    date = data_s[0][16:24] + ', ' + data_s[0][26:34]
-                    comment = data_s[1][:220].strip(u'\x00')
-                    wavelength = str(data_64[77])
-                    radius = data_32[141]
-                    offset = 712
-                    
-                    omega = []
-                    twotheta = []
-                    scantype = []
-                    scanaxis = []
-                    first = []
-                    range = []
-                    step = []
-                    time = []
-                    points = []
-                    data = []
-                
-                    for i in arange(numberofscans):
-                        p = data_i[(offset+4)/4]
-                        drive = data_i[(offset+196)/4]
-                        supplement = data_i[(offset+256)/4]
+                    if start == 'RAW1.01':
+                        fd = open(path, 'rb')
+                        data_32 = fromfile(file=fd, dtype=float32)
+                        fd.close()
+                        fd = open(path, 'rb')
+                        data_64 = fromfile(file=fd, dtype=float64)
+                        fd.close()
+                        fd = open(path, 'rb')
+                        fd.read(4)
+                        data_64_shift = fromfile(file=fd, dtype=float64)
+                        fd.close()
+                        fd = open(path, 'rb')
+                        data_i = fromfile(file=fd, dtype=int32)
+                        fd.close()
+                        fd = open(path, 'rb')
+                        data_s = fromfile(file=fd, dtype='a326')
+                        fd.close()
                         
-                        if mod(offset, 8) == 0:
-                            omega.append(str(data_64[(offset+8)/8]))
-                            twotheta.append(str(data_64[(offset+16)/8]))
-                            s = round(data_64[(offset+176)/8], 6)
-                        else:
-                            omega.append(str(data_64_shift[(offset+8)/8]))
-                            twotheta.append(str(data_64_shift[(offset+16)/8]))
-                            s = round(data_64_shift[(offset+176)/8], 6)
+                        numberofscans = data_i[3]
+                        
+                        date = data_s[0][16:24] + ', ' + data_s[0][26:34]
+                        comment = data_s[1][:220].strip(u'\x00')
+                        wavelength = str(data_64[77])
+                        radius = data_32[141]
+                        offset = 712
+                        
+                        omega = []
+                        twotheta = []
+                        scantype = []
+                        scanaxis = []
+                        first = []
+                        range = []
+                        step = []
+                        time = []
+                        points = []
+                        data = []
+                    
+                        for i in arange(numberofscans):
+                            p = data_i[(offset+4)/4]
+                            drive = data_i[(offset+196)/4]
+                            supplement = data_i[(offset+256)/4]
                             
-                        if drive == 0:
-                            scantype.append('Locked Coupled')
-                            scanaxis.append('2Theta')
-                        elif drive == 1:
-                            scantype.append('Unlocked Coupled')
-                            scanaxis.append('2Theta')
-                        elif drive == 2:
-                            scantype.append('Detector Scan')
-                            scanaxis.append('2Theta')
-                        elif drive == 3:
-                            scantype.append('Rocking Curve')
-                            scanaxis.append('Omega')
-                        elif drive == 9999:
-                            scantype.append('Tube Scan')
-                            scanaxis.append('Omega')
+                            if mod(offset, 8) == 0:
+                                omega.append(str(data_64[(offset+8)/8]))
+                                twotheta.append(str(data_64[(offset+16)/8]))
+                                s = round(data_64[(offset+176)/8], 6)
+                            else:
+                                omega.append(str(data_64_shift[(offset+8)/8]))
+                                twotheta.append(str(data_64_shift[(offset+16)/8]))
+                                s = round(data_64_shift[(offset+176)/8], 6)
+                                
+                            if drive == 0:
+                                scantype.append('Locked Coupled')
+                                scanaxis.append('2Theta')
+                            elif drive == 1:
+                                scantype.append('Unlocked Coupled')
+                                scanaxis.append('2Theta')
+                            elif drive == 2:
+                                scantype.append('Detector Scan')
+                                scanaxis.append('2Theta')
+                            elif drive == 3:
+                                scantype.append('Rocking Curve')
+                                scanaxis.append('Omega')
+                            elif drive == 9999:
+                                scantype.append('Tube Scan')
+                                scanaxis.append('Omega')
+                            else:
+                                scantype.append('???')
+                                scanaxis.append('???')
+                            
+                            if scanaxis[-1] == 'Omega':
+                                f = round(float(omega[-1]), 6)
+                            else:
+                                f = round(float(twotheta[-1]), 6)
+                            
+                            first.append(f)
+                            range.append(s * (p - 1))
+                            step.append(s)
+                            time.append(round(data_32[(offset+192)/4], 6))
+                            points.append(p)
+                            
+                            angle = f + s * arange(p)
+                            index = (offset + 304 + supplement) / 4
+                            offset = offset + 304 + supplement + p * 4
+                            intens = data_32[index:index+p]
+                            data.append(vstack((angle, intens)).T)
+                        
+                        if numberofscans == 1:
+                            self.add_scan(numberofscans, filename, date, comment, wavelength, radius, omega[0], twotheta[0], scantype[0], scanaxis[0], first[0], range[0], step[0], time[0], points[0], data[0])
                         else:
-                            scantype.append('???')
-                            scanaxis.append('???')
+                            self.add_scan(numberofscans, filename, date, comment, wavelength, radius, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
+                            
+                    elif start == 'RAW4.00':
+                        fd = open(path, 'rb')
+                        fd.seek(3)
+                        data_32 = fromfile(file=fd, dtype=float32)
+                        fd.close()
+                        fd = open(path, 'rb')
+                        fd.seek(3)
+                        data_64 = fromfile(file=fd, dtype=float64)
+                        fd.close()
+                        fd = open(path, 'rb')
+                        fd.seek(3)
+                        data_i = fromfile(file=fd, dtype=int32)
+                        fd.close()
+                        fd = open(path, 'rb')
+                        data_s = fromfile(file=fd, dtype='a326')
+                        fd.close()
                         
-                        if scanaxis[-1] == 'Omega':
-                            f = round(float(omega[-1]), 6)
-                        else:
-                            f = round(float(twotheta[-1]), 6)
+                        date = data_s[0][12:22] + ', ' + data_s[0][24:32]
                         
-                        first.append(f)
-                        range.append(s * (p - 1))
-                        step.append(s)
-                        time.append(round(data_32[(offset+192)/4], 6))
-                        points.append(p)
+                        wavelength = str(data_64[61])
+                        first = data_64[318]
+                        last = data_64[319]
+                        points = data_i[374]
+                        time = data_32[396]
                         
-                        angle = f + s * arange(p)
-                        index = (offset + 304 + supplement) / 4
-                        offset = offset + 304 + supplement + p * 4
-                        intens = data_32[index:index+p]
-                        data.append(vstack((angle, intens)).T)
+                        range = last - first
+                        step = range / (points-1)
+                        
+                        angle = linspace(first, last, points)
+                        data = vstack((angle, data_32[699:])).T
                     
-                    if numberofscans == 1:
-                        self.add_scan(numberofscans, filename, date, comment, wavelength, radius, omega[0], twotheta[0], scantype[0], scanaxis[0], first[0], range[0], step[0], time[0], points[0], data[0])
+                        self.add_scan(numberofscans=1, fname=filename, dat=date, wl=wavelength, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
+                    
                     else:
-                        self.add_scan(numberofscans, filename, date, comment, wavelength, radius, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
+                        wx.MessageBox('Beim Laden der Datei:\n\n' + path + '\n\ntrat folgender Fehler auf:\n\nRAW-Version dieser Datei wird nicht verstanden!', 'Fehler beim Laden der Datei', style=wx.ICON_ERROR)
                     
                 elif ext == 'brml':
                     f = open(path, 'r')
@@ -1548,7 +1589,7 @@ class MainFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.7 - 12.05.2015
+        Version 0.7 - 13.05.2015
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()

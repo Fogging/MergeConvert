@@ -1,5 +1,6 @@
 In version 0.7 following improvements were implemented:
 - Experimental support for Bruker BRML files (multiple scan ranges in one file not supported).
+- Experimental support for Bruker RAW Version 4 files (multiple scan ranges in one file not supported).
 
 In version 0.6 following improvements were implemented:
 - Added scaling of patterns using x-shift, y-shift, scale factor or height error.
