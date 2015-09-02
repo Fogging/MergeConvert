@@ -1,3 +1,7 @@
+In version 0.7.1 following improvements were implemented:
+- Improved zooming and moving in the graph window.
+- Summing of multiple scan ranges possible by dialogue after selecting file.
+
 In version 0.7 following improvements were implemented:
 - Experimental support for Bruker BRML files (multiple scan ranges in one file not supported).
 - Experimental support for Bruker RAW Version 4 files (multiple scan ranges in one file not supported).

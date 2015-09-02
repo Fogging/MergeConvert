@@ -5,7 +5,7 @@
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.7.
+# The present version is 0.7.1.
 
 import os, wx, sys
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
@@ -13,10 +13,9 @@ from wx.lib.mixins.listctrl import CheckListCtrlMixin
 import matplotlib
 matplotlib.use('WXAgg')
 from matplotlib.figure import Figure
-from matplotlib.widgets import RectangleSelector
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigCanvas
     
-from pylab import append, arange, argwhere, array, cos, exp, float_, int32, float32, float64, fromfile, linspace, loadtxt, log, mod, ones, pi, savetxt, sin, vstack, zeros
+from pylab import append, arange, argwhere, array, cos, exp, float_, int32, float32, float64, fromfile, linspace, loadtxt, log, mod, ones, pi, savetxt, sin, sum, vstack, zeros
 from StringIO import StringIO
 from time import gmtime, strftime
 from scipy.optimize import leastsq
@@ -577,6 +576,8 @@ class MainFrame(wx.Frame):
         self.checked = []
         self.redraw = 1
         self.lastcolor = 0
+        self.dblclick = 0
+        self.press = None
         self.defaultcolors = array([(0,0,1), (0,0.5,0), (1,0,0), (0,0.75,0.75), (0.75,0,0.75), (0.75,0.75,0), (0,0,0), (0.0,1.0,0.5), (0.5,1.0,0.0), (1.0,0.5,0.0)])
         
         self.create_menu()
@@ -632,9 +633,10 @@ class MainFrame(wx.Frame):
         self.dpi = 100
         self.fig = Figure((10, 6), dpi=self.dpi)
         self.canvas = FigCanvas(self.graphpanel, -1, self.fig)
-        self.canvas.mpl_connect('motion_notify_event', self.on_UpdateCursor)
-        self.canvas.mpl_connect('resize_event', self.on_Resize)
         self.canvas.mpl_connect('button_press_event', self.on_Press)
+        self.canvas.mpl_connect('motion_notify_event', self.on_Motion)
+        self.canvas.mpl_connect('button_release_event', self.on_Release)
+        self.canvas.mpl_connect('resize_event', self.on_Resize)
         self.canvas.mpl_connect('scroll_event', self.on_Scroll)
         
         self.log = wx.TextCtrl(self.graphpanel, -1, size=(666,66), style = wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
@@ -754,14 +756,9 @@ class MainFrame(wx.Frame):
         """ Redraws the figure. """
         self.fig.clear()
         
-        # Since we have only one plot, we can use add_axes instead of add_subplot, but then the subplot configuration tool in the navigation toolbar wouldn't work.
-        # self.axes = self.fig.add_axes([0, 0, 1, 1])
         self.axes = self.fig.add_subplot(111)
         self.axes.locator_params(axis = 'x', nbins = 15)
         self.axes.grid(self.cb_grid.IsChecked())
-        
-        self.rs1 = RectangleSelector(self.axes, self.on_Zoom, drawtype='box', button=1, minspanx=5, minspany=5, spancoords='pixels')
-        self.rs2 = RectangleSelector(self.axes, self.on_Move, drawtype='box', button=3)   # only 'box' will work without problems here
         
         checked = 0
         for i in arange(len(self.filename)):
@@ -796,33 +793,6 @@ class MainFrame(wx.Frame):
         self.on_Resize('')
         self.canvas.draw()
         
-    def on_Zoom(self, eclick, erelease):
-        'eclick and erelease are the press and release events'
-        x1, y1 = eclick.xdata, eclick.ydata
-        x2, y2 = erelease.xdata, erelease.ydata
-        if x2 > x1:
-            self.axes.set_xlim(min(x1,x2), max(x1,x2))
-            self.axes.set_ylim(min(y1,y2), max(y1,y2))
-        else:
-            self.axes.autoscale()
-        self.canvas.draw()
-                
-    def on_Move(self, eclick, erelease):
-        'eclick and erelease are the press and release events'
-        x1, y1 = eclick.xdata, eclick.ydata
-        x2, y2 = erelease.xdata, erelease.ydata
-        xl, xm = self.axes.get_xlim()
-        yl, ym = self.axes.get_ylim()
-        
-        self.axes.set_xlim(xl+x1-x2, xm+x1-x2)
-        
-        if self.axes.get_yscale() == 'log':
-            self.axes.set_ylim(exp(log(yl)+log(y1)-log(y2)), exp(log(ym)+log(y1)-log(y2)))
-        else:
-            self.axes.set_ylim(yl+y1-y2, ym+y1-y2)
-            
-        self.canvas.draw()
-        
     def on_Scroll(self, event):
         x, y = event.xdata, event.ydata
         xl, xm = self.axes.get_xlim()
@@ -846,14 +816,23 @@ class MainFrame(wx.Frame):
         self.canvas.draw()
             
     def on_Press(self, event):
+        self.dblclick = 0
+        
         if hasattr(event, 'dblclick'):
             if event.dblclick:
                 self.axes.autoscale()
                 self.canvas.draw()
-        else:
-            print('Matplotlib Version 1.2 oder neuer zur Doppelklick-Erkennung erforderlich!')
+                self.dblclick = 1
+                
+        if event.button == 1 and event.inaxes == self.axes:
+            self.press = event.xdata, event.ydata
+            self.rectangle = matplotlib.patches.Rectangle((event.xdata, event.ydata), 0, 0, facecolor="grey", alpha=0.25)
+            self.axes.add_patch(self.rectangle)
+            
+        if event.button == 3 and event.inaxes == self.axes:
+            self.press = event.xdata, event.ydata
         
-    def on_UpdateCursor(self, event):
+    def on_Motion(self, event):
         if event.inaxes:
             if abs(event.xdata) > 1e-3 and abs(event.xdata) < 1e5:
                 text1 = 'x = %.5f' %event.xdata
@@ -866,10 +845,52 @@ class MainFrame(wx.Frame):
             self.statusbar.SetStatusText('Linksklick: Zoomen (links>rechts) bzw. Autozoom (rechts>links), Rechtsklick: Bewegen, Scrollen: Zoomen (Strg: x, Shift: y)', 0)
             self.statusbar.SetStatusText(text1, 1)
             self.statusbar.SetStatusText(text2, 2)
+        
         else:
             self.statusbar.SetStatusText('', 0)
             self.statusbar.SetStatusText('', 1)
             self.statusbar.SetStatusText('', 2)
+        
+        if self.press != None: 
+            if event.button == 1 and event.inaxes == self.axes:
+                x1, y1 = self.press
+                x2 = event.xdata
+                y2 = event.ydata
+                
+                self.rectangle.set_height(y2-y1)
+                self.rectangle.set_width(x2-x1)
+                self.canvas.draw()
+            
+            if event.button == 3 and event.inaxes == self.axes:
+                x1, y1 = self.press
+                x2 = event.xdata
+                y2 = event.ydata
+                xl, xm = self.axes.get_xlim()
+                yl, ym = self.axes.get_ylim()
+                        
+                self.axes.set_xlim(xl+x1-x2, xm+x1-x2)
+                if self.axes.get_yscale() == 'log':
+                    self.axes.set_ylim(exp(log(yl)+log(y1)-log(y2)), exp(log(ym)+log(y1)-log(y2)))
+                else:
+                    self.axes.set_ylim(yl+y1-y2, ym+y1-y2)
+                self.canvas.draw()
+            
+    def on_Release(self, event):
+        if event.button == 1 and self.press != None and not self.dblclick:
+            self.rectangle.remove()
+            
+            x1, y1 = self.press
+            x2 = event.xdata
+            y2 = event.ydata
+            
+            if x2 > x1:
+                self.axes.set_xlim(min(x1,x2), max(x1,x2))
+                self.axes.set_ylim(min(y1,y2), max(y1,y2))
+            elif x1 > x2:
+                self.axes.autoscale()
+            
+            self.press = None
+            self.canvas.draw()
             
     def on_Resize(self, event):
         try:
@@ -1435,6 +1456,25 @@ class MainFrame(wx.Frame):
                         wx.MessageBox('Beim Laden der Datei:\n\n' + path + '\n\ntrat folgender Fehler auf:\n\n' + str(error), 'Fehler beim Laden der Datei', style=wx.ICON_ERROR)
                         
     def add_scan(self, numberofscans=0, fname='???', dat='???', comm='???', wl='???', rad=100.0, om='???', tt='???', stype='???', saxis='???', fst=0.0, rng=0.0, stp=0.0, t=0.0, pts=0, d=[[0],[1]]):
+        if numberofscans > 1:
+            dlg = wx.MessageDialog(self, u'Die Datei enthält ' + str(numberofscans) + u' Datensätze.\nAlle Datensätze summieren?', 'Frage', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
+            if dlg.ShowModal() == wx.ID_YES:
+                numberofscans = 1
+                
+                om = om[0]
+                tt = tt[0]
+                stype = stype[0]
+                saxis = saxis[0]
+                fst = fst[0]
+                rng = rng[0]
+                stp = stp[0]
+                t = sum(t)
+                pts = pts[0]
+                
+                sumdata = sum(d, axis=0)
+                d = d[0]
+                d[:,1] = sumdata[:,1]
+                
         if numberofscans > 0:
             name = os.path.splitext(fname)[0]
             
@@ -1589,7 +1629,7 @@ class MainFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.7 - 13.05.2015
+        Version 0.7.1 - 02.09.2015
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
