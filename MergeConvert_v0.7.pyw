@@ -5,9 +5,9 @@
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.7.1.
+# The present version is 0.7.2.
 
-import os, wx, sys
+import os, wx
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
 
 import matplotlib
@@ -639,20 +639,14 @@ class MainFrame(wx.Frame):
         self.canvas.mpl_connect('resize_event', self.on_Resize)
         self.canvas.mpl_connect('scroll_event', self.on_Scroll)
         
-        self.log = wx.TextCtrl(self.graphpanel, -1, size=(666,66), style = wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
-        self.log.SetFont(wx.Font(8, wx.MODERN, wx.NORMAL, wx.NORMAL, 0, "Sans"))
-        sys.stdout = RedirectText(self.log, 'black')
-        sys.stderr = RedirectText(self.log, 'red')
-        
         self.vbox_g = wx.BoxSizer(wx.VERTICAL)
         self.vbox_g.Add(self.canvas, 1, wx.EXPAND)        
-        self.vbox_g.Add(self.log, 0, wx.EXPAND)
         
         self.graphpanel.SetSizer(self.vbox_g)
         self.vbox_g.Fit(self)
         
         # Create the top panel
-        self.loadbutton = wx.Button(self.panel, -1, "Datei\nladen", size=(70,35))
+        self.loadbutton = wx.Button(self.panel, wx.ID_OPEN, "Datei\nladen", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_open_file, self.loadbutton)
               
         self.deletebutton = wx.Button(self.panel, -1, "Datei\nentfernen", size=(70,35))
@@ -687,18 +681,10 @@ class MainFrame(wx.Frame):
         self.cb_grid = wx.CheckBox(self.panel, -1, "Gitternetz anzeigen", style=wx.ALIGN_LEFT)
         self.cb_grid.SetValue(1)
         self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_grid)
-
-        self.cb_header = wx.CheckBox(self.panel, -1, "Kopfdaten mitspeichern", style=wx.ALIGN_LEFT)
-        self.cb_header.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_header)
         
         self.cb_legend = wx.CheckBox(self.panel, -1, "Legende anzeigen", style=wx.ALIGN_LEFT)
         self.cb_legend.SetValue(1)
         self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_legend)
-        
-        self.cb_showlog = wx.CheckBox(self.panel, -1, "Log anzeigen", style=wx.ALIGN_LEFT)
-        self.cb_showlog.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb_showlog, self.cb_showlog)
         
         self.list = CheckListCtrl(self.panel)
         self.list.OnCheckItem = self.on_CheckItem
@@ -720,11 +706,7 @@ class MainFrame(wx.Frame):
         
         self.vbox2 = wx.BoxSizer(wx.VERTICAL)
         self.vbox2.Add(self.cb_grid, 0, border=3, flag=flags)
-        self.vbox2.Add(self.cb_header, 0, border=3, flag=flags)
-        
-        self.vbox3 = wx.BoxSizer(wx.VERTICAL)
-        self.vbox3.Add(self.cb_legend, 0, border=3, flag=flags)
-        self.vbox3.Add(self.cb_showlog, 0, border=3, flag=flags)
+        self.vbox2.Add(self.cb_legend, 0, border=3, flag=flags)
  
         self.hbox = wx.BoxSizer(wx.HORIZONTAL)
         self.hbox.Add(self.loadbutton, 0, border=3, flag=flags)
@@ -735,10 +717,9 @@ class MainFrame(wx.Frame):
         self.hbox.Add(self.correctbutton, 0, border=3, flag=flags)
         self.hbox.Add(self.savetextbutton, 0, border=3, flag=flags)
         self.hbox.Add(self.saveplotbutton, 0, border=3, flag=flags)
-        self.hbox.AddSpacer(7)      
+        self.hbox.AddSpacer(20)
         self.hbox.Add(self.vbox1, 0, flag = wx.CENTER)
         self.hbox.Add(self.vbox2, 0, flag = wx.CENTER)
-        self.hbox.Add(self.vbox3, 0, flag = wx.CENTER)
         
         self.vbox = wx.BoxSizer(wx.VERTICAL)
         self.vbox.Add(self.hbox, 0, flag = wx.ALIGN_LEFT)
@@ -1567,29 +1548,28 @@ class MainFrame(wx.Frame):
                 self.savename = os.path.splitext(dlg.GetFilename())[0]
                 f = open(path, 'w')
                 
-                if self.cb_header.IsChecked():
-                    f.write("----- Header information -------------------------------------------------------\n")
-                    f.write("Current name: " + dlg.GetFilename() + "\n")
-                    f.write("Original name: " + self.filename[i] + "\n")
-                    
-                    if self.scaling[i] == '':
-                        f.write("Comment: " + self.comment[i] + "\n")
-                    else:
-                        f.write("Comment: " + self.comment[i] + " - Modifications: " + self.scaling[i] + "\n")
-                    
-                    f.write("Original date: " + self.date[i] + "\n")
-                    f.write("Wavelength: " + self.wavelength[i] + "\n")
-                    f.write("Goniometer radius: " + str(self.radius[i]) + "\n")
-                    f.write("Omega: " + self.omega[i] + "\n")
-                    f.write("2Theta: " + self.twotheta[i] + "\n")
-                    f.write("Scan type: " + self.scantype[i] + "\n")
-                    f.write("Scan axis: " + self.scanaxis[i] + "\n")
-                    f.write("First angle: " + str(self.first[i]) + "\n")
-                    f.write("Scan range: " + str(self.range[i]) + "\n")
-                    f.write("Step width: " + str(self.step[i]) + "\n")
-                    f.write("Time per step: " + str(self.time[i]) + "\n")
-                    f.write("Number of points: " + str(self.points[i]) + "\n")
-                    f.write("--------------------------------------------------------------------------------\n\n")
+                f.write("----- Header information -------------------------------------------------------\n")
+                f.write("Current name: " + dlg.GetFilename() + "\n")
+                f.write("Original name: " + self.filename[i] + "\n")
+                
+                if self.scaling[i] == '':
+                    f.write("Comment: " + self.comment[i] + "\n")
+                else:
+                    f.write("Comment: " + self.comment[i] + " - Modifications: " + self.scaling[i] + "\n")
+                
+                f.write("Original date: " + self.date[i] + "\n")
+                f.write("Wavelength: " + self.wavelength[i] + "\n")
+                f.write("Goniometer radius: " + str(self.radius[i]) + "\n")
+                f.write("Omega: " + self.omega[i] + "\n")
+                f.write("2Theta: " + self.twotheta[i] + "\n")
+                f.write("Scan type: " + self.scantype[i] + "\n")
+                f.write("Scan axis: " + self.scanaxis[i] + "\n")
+                f.write("First angle: " + str(self.first[i]) + "\n")
+                f.write("Scan range: " + str(self.range[i]) + "\n")
+                f.write("Step width: " + str(self.step[i]) + "\n")
+                f.write("Time per step: " + str(self.time[i]) + "\n")
+                f.write("Number of points: " + str(self.points[i]) + "\n")
+                f.write("--------------------------------------------------------------------------------\n\n")
                    
                 f.write("        Angle\t    Intensity\n")
                 
@@ -1605,13 +1585,6 @@ class MainFrame(wx.Frame):
                 
             i = self.list.GetNextSelected(i)
             
-    def on_cb_showlog(self, event):
-        if self.cb_showlog.IsChecked():
-            self.log.Show()
-        else:
-            self.log.Hide()
-        self.vbox_g.Layout()
-        
     def on_about(self, event):
         msg = """Anzeige, Konvertierung und Verbinden von Diffraktometer-Dateien:
         
@@ -1629,7 +1602,7 @@ class MainFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.7.1 - 02.09.2015
+        Version 0.7.2 - 19.10.2015
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
@@ -1640,7 +1613,6 @@ class MainFrame(wx.Frame):
         self.timeroff = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.on_flash_status_off, self.timeroff)
         self.timeroff.Start(flash_len_ms, oneShot=True)
-        print msg
     
     def on_flash_status_off(self, event):
         self.statusbar.SetStatusText('')
@@ -1649,20 +1621,8 @@ class MainFrame(wx.Frame):
         self.Destroy()
         
         
-class RedirectText(object):
-    """ Redirects STDOUT and STDERR to log window. """
-    def __init__(self, aWxTextCtrl, color):
-        self.out = aWxTextCtrl
-        self.color = color
- 
-    def write(self, string):
-        self.out.SetDefaultStyle(wx.TextAttr(self.color))
-        self.out.WriteText(string)
-        self.out.SetInsertionPoint(self.out.GetLastPosition())
-
-        
 if __name__ == '__main__':
-    app = wx.PySimpleApp()
+    app = wx.PySimpleApp(redirect=True)
     app.frame = MainFrame()
     app.frame.Show()
     app.MainLoop()
