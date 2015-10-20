@@ -1,6 +1,7 @@
 In version 0.7.2 following improvements were implemented:
 - Removed logging window, replaced by pop-up window in case of errors.
 - Updated keyboard shortcuts, added tooltips to buttons.
+- Saving of text files now possible in three file types with different headers.
 
 In version 0.7.1 following improvements were implemented:
 - Improved zooming and moving in the graph window.

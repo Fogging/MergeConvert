@@ -572,7 +572,7 @@ class MainFrame(wx.Frame):
         self.radius = []
         self.scaling = []
         
-        self.savename = ''
+        self.savename = 'Plot'
         self.checked = []
         self.redraw = 1
         self.lastcolor = 0
@@ -1544,7 +1544,7 @@ class MainFrame(wx.Frame):
         
     def on_save_plot(self, event):
         file_choices = "Portable Network Graphics (*.png)|*.png|Encapsulated Postscript (*.eps)|*.eps|Portable Document Format (*.pdf)|*.pdf|Scalable Vector Graphics (*.svg)|*.svg"
-        filename = self.savename + ".png"
+        filename = self.savename + '.png'
         dlg = wx.FileDialog(self, message="Grafik speichern unter...", defaultFile=filename, wildcard=file_choices, style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
         
         if dlg.ShowModal() == wx.ID_OK:
@@ -1560,45 +1560,51 @@ class MainFrame(wx.Frame):
             wx.MessageBox('Bitte mindestens einen Datensatz in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
         
         while i > -1:
-            file_choices = "TXT-Datei (*.txt)|*.txt|DAT-Datei (*.dat)|*.dat|Beliebiger Typ (*.*)|*.*"
+            file_choices = "TXT-Datei mit Header (*.txt)|*.txt|DAT-Datei ohne Header (*.dat)|*.dat|XY-Datei nur Werte (*.xy)|*.xy"
             filename = self.name[i] + ".txt"
             dlg = wx.FileDialog(self, message="Daten speichern unter...", defaultFile=filename, wildcard=file_choices, style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
             
             if dlg.ShowModal() == wx.ID_OK:
                 path = dlg.GetPath()
-                self.savename = os.path.splitext(dlg.GetFilename())[0]
+                filename = dlg.GetFilename()
+                self.savename = os.path.splitext(filename)[0]
+                ext = os.path.splitext(filename)[-1].lstrip('.').lower()
                 f = open(path, 'w')
                 
-                f.write("----- Header information -------------------------------------------------------\n")
-                f.write("Current name: " + dlg.GetFilename() + "\n")
-                f.write("Original name: " + self.filename[i] + "\n")
+                if ext == 'txt':
+                    f.write("----- Header information -------------------------------------------------------\n")
+                    f.write("Current name: " + dlg.GetFilename() + "\n")
+                    f.write("Original name: " + self.filename[i] + "\n")
+                    
+                    if self.scaling[i] == '':
+                        f.write("Comment: " + self.comment[i] + "\n")
+                    else:
+                        f.write("Comment: " + self.comment[i] + " - Modifications: " + self.scaling[i] + "\n")
+                    
+                    f.write("Original date: " + self.date[i] + "\n")
+                    f.write("Wavelength: " + self.wavelength[i] + "\n")
+                    f.write("Goniometer radius: " + str(self.radius[i]) + "\n")
+                    f.write("Omega: " + self.omega[i] + "\n")
+                    f.write("2Theta: " + self.twotheta[i] + "\n")
+                    f.write("Scan type: " + self.scantype[i] + "\n")
+                    f.write("Scan axis: " + self.scanaxis[i] + "\n")
+                    f.write("First angle: " + str(self.first[i]) + "\n")
+                    f.write("Scan range: " + str(self.range[i]) + "\n")
+                    f.write("Step width: " + str(self.step[i]) + "\n")
+                    f.write("Time per step: " + str(self.time[i]) + "\n")
+                    f.write("Number of points: " + str(self.points[i]) + "\n")
+                    f.write("--------------------------------------------------------------------------------\n\n")
                 
-                if self.scaling[i] == '':
-                    f.write("Comment: " + self.comment[i] + "\n")
-                else:
-                    f.write("Comment: " + self.comment[i] + " - Modifications: " + self.scaling[i] + "\n")
-                
-                f.write("Original date: " + self.date[i] + "\n")
-                f.write("Wavelength: " + self.wavelength[i] + "\n")
-                f.write("Goniometer radius: " + str(self.radius[i]) + "\n")
-                f.write("Omega: " + self.omega[i] + "\n")
-                f.write("2Theta: " + self.twotheta[i] + "\n")
-                f.write("Scan type: " + self.scantype[i] + "\n")
-                f.write("Scan axis: " + self.scanaxis[i] + "\n")
-                f.write("First angle: " + str(self.first[i]) + "\n")
-                f.write("Scan range: " + str(self.range[i]) + "\n")
-                f.write("Step width: " + str(self.step[i]) + "\n")
-                f.write("Time per step: " + str(self.time[i]) + "\n")
-                f.write("Number of points: " + str(self.points[i]) + "\n")
-                f.write("--------------------------------------------------------------------------------\n\n")
-                   
-                f.write("        Angle\t    Intensity\n")
+                if ext == 'txt' or ext == 'dat':
+                    f.write("        Angle\t    Intensity\n")
                 
                 if self.cb_cps.IsChecked():
-                    f.write("          deg\t          cps\n")
+                    if ext == 'txt' or ext == 'dat':
+                        f.write("          deg\t          cps\n")
                     savetxt(f, vstack((self.data[i][:,0], self.data[i][:,1]/self.time[i])).T, fmt='%13.4f', delimiter='\t')
                 else:
-                    f.write("          deg\t       counts\n")
+                    if ext == 'txt' or ext == 'dat':
+                        f.write("          deg\t       counts\n")
                     savetxt(f, self.data[i], fmt='%13.4f', delimiter='\t')
                 
                 f.close()
