@@ -578,7 +578,7 @@ class MainFrame(wx.Frame):
         self.lastcolor = 0
         self.dblclick = 0
         self.press = None
-        self.defaultcolors = array([(0,0,1), (0,0.5,0), (1,0,0), (0,0.75,0.75), (0.75,0,0.75), (0.75,0.75,0), (0,0,0), (0.0,1.0,0.5), (0.5,1.0,0.0), (1.0,0.5,0.0)])
+        self.defaultcolors = array([(0,0,1), (0,0.5,0), (1,0,0), (0,0.75,0.75), (0.75,0,0.75), (0.75,0.75,0), (0,0,0), (0.5,0.5,0.5), (0.5,0.75,0.25), (1.0,0.5,0.0), (0.4,0,0.4)])
         
         self.create_menu()
         self.create_status_bar()
@@ -922,6 +922,7 @@ class MainFrame(wx.Frame):
             self.list.SetStringItem(i, 4, str(self.time[i]))
             self.list.SetStringItem(i, 5, self.date[i])
             self.list.SetStringItem(i, 6, self.comment[i])
+            self.list.SetItemTextColour(i, wx.Colour(255*self.color[i][0], 255*self.color[i][1], 255*self.color[i][2]))
             
             scalecomment = ''
             if self.xshift[i] != 0:
@@ -957,7 +958,7 @@ class MainFrame(wx.Frame):
             data.SetCustomColour(1, (46, 144, 40))
             data.SetCustomColour(2, (178, 0, 38))
             data.SetCustomColour(3, (78, 188, 206))
-            data.SetCustomColour(4, (230, 110, 1))        
+            data.SetCustomColour(4, (230, 110, 1))
             data.SetColour(wx.Colour(self.color[i][0]*255, self.color[i][1]*255, self.color[i][2]*255))
             dlg = wx.ColourDialog(self, data)
            
@@ -965,6 +966,7 @@ class MainFrame(wx.Frame):
                 res = dlg.GetColourData().Colour
                 self.color[i] = (res[0]/255.0, res[1]/255.0, res[2]/255.0)
                 self.draw_figure()
+                self.update_list()
                 
         else:
             wx.MessageBox('Bitte genau einen Datensatz in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
