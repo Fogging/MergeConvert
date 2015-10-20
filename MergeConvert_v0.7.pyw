@@ -589,31 +589,44 @@ class MainFrame(wx.Frame):
         self.menubar = wx.MenuBar()
         
         menu_file = wx.Menu()
-        m_load = menu_file.Append(-1, "&Datei laden...\tCtrl-O", "Daten aus Datei laden")
+        m_load = menu_file.Append(wx.ID_OPEN, "Datei &laden\tStrg+O", "Daten aus Datei laden")
         self.Bind(wx.EVT_MENU, self.on_open_file, m_load)
-        m_delete = menu_file.Append(-1, "&Datei entfernen...\tCtrl-E", "Bestehende Datei entfernen")
+        m_delete = menu_file.Append(wx.ID_DELETE, "Datei &entfernen\tEntf", "Datensatz entfernen")
         self.Bind(wx.EVT_MENU, self.on_delete_file, m_delete)
-        m_color = menu_file.Append(-1, "&Farbe wechseln...\tCtrl-F", "Farbe wechseln")
+        m_color = menu_file.Append(-1, "&Farbe wechseln\tStrg+F", "Farbe eines Datensatzes wechseln")
         self.Bind(wx.EVT_MENU, self.on_color, m_color)
         menu_file.AppendSeparator()
-        m_scale = menu_file.Append(-1, "&Daten skalieren...\tCtrl-C", "Daten verbinden")
+        m_scale = menu_file.Append(-1, "Daten &skalieren\tStrg+C", "Datensatz skalieren")
         self.Bind(wx.EVT_MENU, self.on_scale, m_scale)
-        m_merge = menu_file.Append(-1, "&Daten verbinden...\tCtrl-V", "Daten verbinden")
+        m_merge = menu_file.Append(-1, "Daten &verbinden\tStrg+V", u"Zwei Datensätze verbinden")
         self.Bind(wx.EVT_MENU, self.on_merge, m_merge)
-        m_correct = menu_file.Append(-1, "&XRR-Korrektur...\tCtrl-K", "XRR-Daten korrigieren")
+        m_correct = menu_file.Append(-1, "&XRR-Korrektur\tStrg+K", "XRR-Daten korrigieren")
         self.Bind(wx.EVT_MENU, self.on_correct, m_correct)
         menu_file.AppendSeparator()
-        m_savetext = menu_file.Append(-1, "&Daten speichern...\tCtrl-S", "Daten als Textdatei speichern")
+        m_savetext = menu_file.Append(wx.ID_SAVE, "&Daten speichern\tStrg+S", "Datensatz als Textdatei speichern")
         self.Bind(wx.EVT_MENU, self.on_save_text, m_savetext)
-        m_saveplot = menu_file.Append(-1, "&Grafik speichern...\tCtrl-G", "Grafik als Datei speichern")
+        m_saveplot = menu_file.Append(-1, "&Grafik speichern\tStrg+G", "Grafik als Datei speichern")
         self.Bind(wx.EVT_MENU, self.on_save_plot, m_saveplot)
         menu_file.AppendSeparator()
-        m_exit = menu_file.Append(-1, "&Beenden\tCtrl-X", "Programm verlassen")
+        m_exit = menu_file.Append(wx.ID_CANCEL, "&Beenden\tStrg+X", "Programm verlassen")
         self.Bind(wx.EVT_MENU, self.on_exit, m_exit)
         
         menu_help = wx.Menu()
-        m_about = menu_help.Append(-1, "&Hilfe\tF1", "Hilfe zum Programm")
+        m_about = menu_help.Append(wx.ID_HELP, "&Hilfe\tF1", "Hilfe zum Programm")
         self.Bind(wx.EVT_MENU, self.on_about, m_about)
+        
+        self.accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('O'), m_load.GetId()),
+                                              (wx.ACCEL_NORMAL, wx.WXK_DELETE, m_delete.GetId()),
+                                              (wx.ACCEL_CTRL, ord('F'), m_color.GetId()),
+                                              (wx.ACCEL_CTRL, ord('C'), m_scale.GetId()),
+                                              (wx.ACCEL_CTRL, ord('V'), m_merge.GetId()),
+                                              (wx.ACCEL_CTRL, ord('K'), m_correct.GetId()),
+                                              (wx.ACCEL_CTRL, ord('S'), m_savetext.GetId()),
+                                              (wx.ACCEL_CTRL, ord('G'), m_saveplot.GetId()),
+                                              (wx.ACCEL_CTRL, ord('X'), m_exit.GetId()),
+                                              (wx.ACCEL_NORMAL, wx.WXK_F1, m_about.GetId()),
+                                             ])
+        self.SetAcceleratorTable(self.accel_tbl)
         
         self.menubar.Append(menu_file, "&Datei")
         self.menubar.Append(menu_help, "&Hilfe")
@@ -648,27 +661,35 @@ class MainFrame(wx.Frame):
         # Create the top panel
         self.loadbutton = wx.Button(self.panel, wx.ID_OPEN, "Datei\nladen", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_open_file, self.loadbutton)
+        self.loadbutton.SetToolTip(wx.ToolTip("Daten aus Datei laden (Strg+O)"))
               
-        self.deletebutton = wx.Button(self.panel, -1, "Datei\nentfernen", size=(70,35))
+        self.deletebutton = wx.Button(self.panel, wx.ID_DELETE, "Datei\nentfernen", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_delete_file, self.deletebutton)
+        self.deletebutton.SetToolTip(wx.ToolTip("Datensatz entfernen (Entf)"))
         
         self.colorbutton = wx.Button(self.panel, -1, "Farbe\nwechseln", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_color, self.colorbutton)
+        self.colorbutton.SetToolTip(wx.ToolTip("Farbe eines Datensatzes wechseln (Strg+F)"))
         
         self.scalebutton = wx.Button(self.panel, -1, "Daten\nskalieren", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_scale, self.scalebutton)
+        self.scalebutton.SetToolTip(wx.ToolTip("Datensatz skalieren (Strg+C)"))
         
         self.mergebutton = wx.Button(self.panel, -1, "Daten\nverbinden", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_merge, self.mergebutton)
+        self.mergebutton.SetToolTip(wx.ToolTip(u"Zwei Datensätze verbinden (Strg+V)"))
         
         self.correctbutton = wx.Button(self.panel, -1, "XRR-\nKorrektur", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_correct, self.correctbutton)
+        self.correctbutton.SetToolTip(wx.ToolTip("XRR-Daten korrigieren (Strg+K)"))
 
-        self.savetextbutton = wx.Button(self.panel, -1, "Daten\nspeichern", size=(70,35))
+        self.savetextbutton = wx.Button(self.panel, wx.ID_SAVE, "Daten\nspeichern", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_save_text, self.savetextbutton)
+        self.savetextbutton.SetToolTip(wx.ToolTip("Datensatz als Textdatei speichern (Strg+S)"))
         
         self.saveplotbutton = wx.Button(self.panel, -1, "Grafik\nspeichern", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_save_plot, self.saveplotbutton)
+        self.saveplotbutton.SetToolTip(wx.ToolTip("Grafik als Datei speichern (Strg+G)"))
         
         self.cb_cps = wx.CheckBox(self.panel, -1, "Counts pro Sekunde", style=wx.ALIGN_LEFT)
         self.cb_cps.SetValue(1)
@@ -1602,7 +1623,7 @@ class MainFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.7.2 - 19.10.2015
+        Version 0.7.2 - 20.10.2015
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
