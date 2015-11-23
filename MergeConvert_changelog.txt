@@ -1,3 +1,7 @@
+In version 0.7.3 following improvements were implemented:
+- Merging of data with same scan range and step size (additional to merging of XRR data).
+- Support of non-ASCII characters in sample name of RAW V3 files.
+
 In version 0.7.2 following improvements were implemented:
 - Removed logging window, replaced by pop-up window in case of errors.
 - Updated keyboard shortcuts, added tooltips to buttons.

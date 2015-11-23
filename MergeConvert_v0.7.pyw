@@ -1,13 +1,14 @@
 ﻿#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # Copyright 2015 by Hartmut Stoecker
 # Contact: hartmut.stoecker@physik.tu-freiberg.de
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.7.2.
+# The present version is 0.7.3.
 
-import os, wx
+import os, wx, codecs
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
 
 import matplotlib
@@ -225,7 +226,6 @@ class MergeWindow(wx.Dialog):
         app.frame.step[i] = self.angle[1] - self.angle[0]
         app.frame.points[i] = len(self.angle)
         app.frame.data[i] = vstack((self.angle, self.int)).T
-        app.frame.checked[i] = 1
         
         app.frame.update_list()
         app.frame.draw_figure()
@@ -276,9 +276,9 @@ class CorrectWindow(wx.Dialog):
         self.redrawbutton = wx.Button(self.panel, -1, "Neu zeichnen")
         self.Bind(wx.EVT_BUTTON, self.do_correct, self.redrawbutton)
         
-        nametext = os.path.splitext(app.frame.filename[self.a])[0] + '_corr'
+        nametext = os.path.splitext(app.frame.filename[self.a])[0] + '_corr' + os.path.splitext(app.frame.filename[self.a])[1]
         self.namelabel = wx.StaticText(self.panel, -1, "Name:")
-        self.name = wx.TextCtrl(self.panel, -1, nametext, style=wx.TE_PROCESS_ENTER, size=(260, 20))  
+        self.name = wx.TextCtrl(self.panel, -1, nametext, style=wx.TE_PROCESS_ENTER, size=(260, 20))
         self.name.Bind(wx.EVT_TEXT_ENTER, self.do_correct)
         
         self.okButton = wx.Button(self.panel, wx.ID_OK, 'OK', size=(90, 25))
@@ -377,12 +377,7 @@ class CorrectWindow(wx.Dialog):
         app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
         app.frame.comment[i] = app.frame.filename[self.a] + ' - Corrected using beam size ' + str(self.beamsize) + ' mm and sample size ' + str(self.samplesize) + ' mm'
         app.frame.date[i] = strftime("%d-%b-%Y, %H:%M:%S")
-        app.frame.first[i] = self.angle[0]
-        app.frame.range[i] = self.angle[-1] - self.angle[0]
-        app.frame.step[i] = self.angle[1] - self.angle[0]
-        app.frame.points[i] = len(self.angle)
         app.frame.data[i] = vstack((self.angle, self.res)).T
-        app.frame.checked[i] = 1
         
         app.frame.update_list()
         app.frame.draw_figure()
@@ -980,18 +975,48 @@ class MainFrame(wx.Frame):
             
     def on_merge(self, event):
         x = self.list.GetSelectedItemCount()
+        sel = []
+        stepOK = 1
+        firstOK = 1
+        rangeOK = 1
         
-        if x == 2:
+        if x >= 2:
             i = self.list.GetFirstSelected()
-            j = self.list.GetNextSelected(i)
+            sel.append(i)
+            stepwidth = self.step[i]
+            firstangle = self.first[i]
+            scanrange = self.range[i]
             
-            if (self.step[i] - self.step[j]) < 1e-7:
-                MergeWindow(None, -1, 'Daten verbinden').ShowModal()
-            else:
-                wx.MessageBox('Bitte nur Dateien mit gleicher Schrittweite verbinden!', 'Fehler', style=wx.ICON_ERROR)
+            while len(sel) != x:
+                i = self.list.GetNextSelected(i)
+                sel.append(i)
+                if (stepwidth - self.step[i]) > 1e-7:
+                    stepOK = 0
+                if firstangle != self.first[i]:
+                    firstOK = 0
+                if scanrange != self.range[i]:
+                    rangeOK = 0
+        
+        if x == 2 and stepOK and not firstOK:
+            MergeWindow(None, -1, 'Daten verbinden').ShowModal()
+        
+        elif x >= 2 and stepOK and firstOK and rangeOK:
+            filename = self.filename[sel[0]]
+            time = self.time[sel[0]]
+            data = 1.0 * self.data[sel[0]]
+            
+            for i in arange(len(sel)-1)+1:
+                filename = filename + ' + ' + self.filename[sel[i]]
+                time = time + self.time[sel[i]]
+                data[:,1] = data[:,1] + self.data[sel[i]][:,1]
+            
+            self.add_scan(1, filename, self.date[sel[0]], filename, self.wavelength[sel[0]], self.radius[sel[0]], self.omega[sel[0]], self.twotheta[sel[0]], self.scantype[sel[0]], self.scanaxis[sel[0]], self.first[sel[0]], self.range[sel[0]], self.step[sel[0]], time, self.points[sel[0]], data)
+            
+        elif x < 2:
+            wx.MessageBox('Bitte mindestens zwei Dateien in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
             
         else:
-            wx.MessageBox('Bitte genau zwei Dateien in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
+            wx.MessageBox(u'Dateien müssen gleiche Schrittweite besitzen!\nZusammenfügen von zwei XRR-Dateien erfordert Überlappungsbereich!', 'Fehler', style=wx.ICON_ERROR)
             
     def on_correct(self, event):
         x = self.list.GetSelectedItemCount()
@@ -1110,28 +1135,30 @@ class MainFrame(wx.Frame):
                     
                     if start == 'RAW1.01':
                         fd = open(path, 'rb')
-                        data_32 = fromfile(file=fd, dtype=float32)
+                        fd.seek(0)
+                        data_32 = fromfile(fd, float32)
+                        fd.seek(0)
+                        data_64 = fromfile(fd, float64)
+                        fd.seek(4)
+                        data_64_shift = fromfile(fd, float64)
+                        fd.seek(0)
+                        data_i = fromfile(fd, int32)
                         fd.close()
-                        fd = open(path, 'rb')
-                        data_64 = fromfile(file=fd, dtype=float64)
-                        fd.close()
-                        fd = open(path, 'rb')
-                        fd.read(4)
-                        data_64_shift = fromfile(file=fd, dtype=float64)
-                        fd.close()
-                        fd = open(path, 'rb')
-                        data_i = fromfile(file=fd, dtype=int32)
-                        fd.close()
-                        fd = open(path, 'rb')
-                        data_s = fromfile(file=fd, dtype='a326')
+
+                        fd = codecs.open(path, encoding='Latin-1')
+                        fd.seek(16)
+                        data_s1 = fd.read(8)
+                        fd.seek(26)
+                        data_s2 = fd.read(8)
+                        fd.seek(326)
+                        data_s3 = fd.read(220)
                         fd.close()
                         
-                        numberofscans = data_i[3]
-                        
-                        date = data_s[0][16:24] + ', ' + data_s[0][26:34]
-                        comment = data_s[1][:220].strip(u'\x00')
+                        date = data_s1 + ', ' + data_s2
+                        comment = data_s3.strip(u'\x00')
                         wavelength = str(data_64[77])
                         radius = data_32[141]
+                        numberofscans = data_i[3]
                         offset = 712
                         
                         omega = []
@@ -1204,21 +1231,20 @@ class MainFrame(wx.Frame):
                         fd = open(path, 'rb')
                         fd.seek(3)
                         data_32 = fromfile(file=fd, dtype=float32)
-                        fd.close()
-                        fd = open(path, 'rb')
                         fd.seek(3)
                         data_64 = fromfile(file=fd, dtype=float64)
-                        fd.close()
-                        fd = open(path, 'rb')
                         fd.seek(3)
                         data_i = fromfile(file=fd, dtype=int32)
                         fd.close()
-                        fd = open(path, 'rb')
-                        data_s = fromfile(file=fd, dtype='a326')
+                        
+                        fd = codecs.open(path, encoding='Latin-1')
+                        fd.seek(12)
+                        data_s1 = fd.read(10)
+                        fd.seek(24)
+                        data_s2 = fd.read(8)
                         fd.close()
                         
-                        date = data_s[0][12:22] + ', ' + data_s[0][24:32]
-                        
+                        date = data_s1 + ', ' + data_s2
                         wavelength = str(data_64[61])
                         first = data_64[318]
                         last = data_64[319]
@@ -1618,20 +1644,15 @@ class MainFrame(wx.Frame):
         msg = """Anzeige, Konvertierung und Verbinden von Diffraktometer-Dateien:
         
         - Laden einer oder mehrerer Dateien
-        - Formate: raw (V3), udf, x00, njc, val, dat, txt
-        - Datenanzeige per Grafik
+        - Formate: raw, udf, x00, njc, val, dat, txt
         - Daten und Grafik speichern
-        - Counts pro Sekunde oder Counts
-        - Logarithmische y-Achse
-        - Kopfdaten mitspeichern
-        - Farbe wechseln
         - Daten skalieren
         - Daten verbinden
         - XRR-Korrektur bei kleiner Probe
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.7.2 - 20.10.2015
+        Version 0.7.3 - 23.11.2015
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
