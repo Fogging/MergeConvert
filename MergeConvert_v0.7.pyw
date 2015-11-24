@@ -9,6 +9,7 @@
 # The present version is 0.7.3.
 
 import os, wx, codecs
+import xml.etree.ElementTree as ET
 from wx.lib.mixins.listctrl import CheckListCtrlMixin
 
 import matplotlib
@@ -23,6 +24,7 @@ from scipy.optimize import leastsq
 from copy import deepcopy
 from base64 import b64decode
 from zlib import decompress, MAX_WBITS
+from zipfile import ZipFile
 
 
 class CheckListCtrl(wx.ListCtrl, CheckListCtrlMixin):
@@ -1263,26 +1265,28 @@ class MainFrame(wx.Frame):
                         wx.MessageBox('Beim Laden der Datei:\n\n' + path + '\n\ntrat folgender Fehler auf:\n\nRAW-Version dieser Datei wird nicht verstanden!', 'Fehler beim Laden der Datei', style=wx.ICON_ERROR)
                     
                 elif ext == 'brml':
-                    f = open(path, 'r')
-                    x = f.read()
+                    f = open(path, 'rb')
+                    x = f.read(5)
                     f.close()
                     
-                    xx = x.split('<TypeDesc>BrukerAXS.Common.ExperimentV5.Experiment.Data.DataContainer</TypeDesc>')
-                    xxx = xx[1].split('<SerializedObject xsi:type="xsd:string">')
-                    xxxx = xxx[1].split('</SerializedObject>')
+                    if x[:4] == u'PK\x03\x04':
+                        z = ZipFile(path).read('Experiment0/RawData0.xml')
                     
-                    y = b64decode(xxxx[0])
-                    z = decompress(y, MAX_WBITS|16)
-                    
-                    l = z.split('</Datum><Datum>')
-                    l[0] = l[0].split('<Datum>')[1]
-                    l[-1] = l[-1].split('</Datum>')[0]
+                    elif x[:5] == '<?xml':
+                        root = ET.parse(path).getroot()
+                        for containers in root.iter('Containers'):
+                            if containers.find('TypeDesc').text == 'BrukerAXS.Common.ExperimentV5.Experiment.Data.DataContainer':
+                                y = b64decode(containers.find('SerializedObject').text)
+                                z = decompress(y, MAX_WBITS|16)
+                                break
                     
                     angle = []
                     intens = []
                     
-                    for line in l:
-                        values = line.split(',')
+                    zz = unicode(z, errors='ignore').encode('utf16')
+                    root = ET.fromstring(zz)
+                    for datum in root.iter('Datum'):
+                        values = datum.text.split(',')
                         angle.append(values[2])
                         intens.append(values[-1])
                     
@@ -1293,7 +1297,7 @@ class MainFrame(wx.Frame):
                     first = float(z.split('<Start>')[1].split('</Start>')[0])
                     range = float(z.split('<Stop>')[1].split('</Stop>')[0]) - first
                     step = float(z.split('<Increment>')[1].split('</Increment>')[0])
-                    time = float(z.split('<TimePerStep>')[1].split('</TimePerStep>')[0])
+                    time = float(z.split('MeasuredTimePerStep="')[1].split('"')[0])
                     points = float(z.split('<MeasurementPoints>')[1].split('</MeasurementPoints>')[0])
                     
                     self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), stype=scantype, saxis=scanaxis, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
