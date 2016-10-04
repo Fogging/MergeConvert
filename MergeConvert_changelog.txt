@@ -1,3 +1,8 @@
+In version 0.7.4 following improvements were implemented:
+- Subtracting of data with same scan range and step size (new button).
+- Sample displacement formula changed to 2theta = 2theta_data - 2 * displacement / radius * cos(2theta_data / 2) + xshift.
+- Readout of secondary goniometer radius and average wavelength for BRML files.
+
 In version 0.7.3 following improvements were implemented:
 - Merging of data with same scan range and step size (additional to merging of XRR data).
 - Support of non-ASCII characters in sample name of RAW V3 files.

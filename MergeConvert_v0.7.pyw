@@ -6,7 +6,7 @@
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.7.3.
+# The present version is 0.7.4.
 
 import os, wx, codecs
 import xml.etree.ElementTree as ET
@@ -597,6 +597,8 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_scale, m_scale)
         m_merge = menu_file.Append(-1, "Daten &verbinden\tStrg+V", u"Zwei Datensätze verbinden")
         self.Bind(wx.EVT_MENU, self.on_merge, m_merge)
+        m_subtr = menu_file.Append(-1, "Daten &abziehen\tStrg+A", u"Zwei Datensätze subtrahieren")
+        self.Bind(wx.EVT_MENU, self.on_subtr, m_subtr)
         m_correct = menu_file.Append(-1, "&XRR-Korrektur\tStrg+K", "XRR-Daten korrigieren")
         self.Bind(wx.EVT_MENU, self.on_correct, m_correct)
         menu_file.AppendSeparator()
@@ -617,6 +619,7 @@ class MainFrame(wx.Frame):
                                               (wx.ACCEL_CTRL, ord('F'), m_color.GetId()),
                                               (wx.ACCEL_CTRL, ord('C'), m_scale.GetId()),
                                               (wx.ACCEL_CTRL, ord('V'), m_merge.GetId()),
+                                              (wx.ACCEL_CTRL, ord('A'), m_subtr.GetId()),
                                               (wx.ACCEL_CTRL, ord('K'), m_correct.GetId()),
                                               (wx.ACCEL_CTRL, ord('S'), m_savetext.GetId()),
                                               (wx.ACCEL_CTRL, ord('G'), m_saveplot.GetId()),
@@ -676,6 +679,10 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.on_merge, self.mergebutton)
         self.mergebutton.SetToolTip(wx.ToolTip(u"Zwei Datensätze verbinden (Strg+V)"))
         
+        self.subtrbutton = wx.Button(self.panel, -1, "Daten\nabziehen", size=(70,35))
+        self.Bind(wx.EVT_BUTTON, self.on_subtr, self.subtrbutton)
+        self.subtrbutton.SetToolTip(wx.ToolTip(u"Zwei Datensätze subtrahieren (Strg+A)"))
+        
         self.correctbutton = wx.Button(self.panel, -1, "XRR-\nKorrektur", size=(70,35))
         self.Bind(wx.EVT_BUTTON, self.on_correct, self.correctbutton)
         self.correctbutton.SetToolTip(wx.ToolTip("XRR-Daten korrigieren (Strg+K)"))
@@ -732,6 +739,7 @@ class MainFrame(wx.Frame):
         self.hbox.Add(self.colorbutton, 0, border=3, flag=flags)
         self.hbox.Add(self.scalebutton, 0, border=3, flag=flags)
         self.hbox.Add(self.mergebutton, 0, border=3, flag=flags)
+        self.hbox.Add(self.subtrbutton, 0, border=3, flag=flags)
         self.hbox.Add(self.correctbutton, 0, border=3, flag=flags)
         self.hbox.Add(self.savetextbutton, 0, border=3, flag=flags)
         self.hbox.Add(self.saveplotbutton, 0, border=3, flag=flags)
@@ -763,7 +771,7 @@ class MainFrame(wx.Frame):
         for i in arange(len(self.filename)):
             if self.list.IsChecked(i):
                 checked += 1
-                angle = self.data[i][:,0] + 180 / pi * self.displace[i] / self.radius[i] * cos(self.data[i][:,0] * pi / 360) + self.xshift[i]
+                angle = self.data[i][:,0] - 360 / pi * self.displace[i] / self.radius[i] * cos(self.data[i][:,0] * pi / 360) + self.xshift[i]
                 intensity = self.data[i][:,1] * self.scale[i] + self.yshift[i]
 
                 if self.cb_cps.IsChecked() and self.time[i] != 0:
@@ -1008,7 +1016,7 @@ class MainFrame(wx.Frame):
             data = 1.0 * self.data[sel[0]]
             
             for i in arange(len(sel)-1)+1:
-                filename = filename + ' + ' + self.filename[sel[i]]
+                filename = filename + ' - ' + self.filename[sel[i]]
                 time = time + self.time[sel[i]]
                 data[:,1] = data[:,1] + self.data[sel[i]][:,1]
             
@@ -1019,6 +1027,29 @@ class MainFrame(wx.Frame):
             
         else:
             wx.MessageBox(u'Dateien müssen gleiche Schrittweite besitzen!\nZusammenfügen von zwei XRR-Dateien erfordert Überlappungsbereich!', 'Fehler', style=wx.ICON_ERROR)
+            
+    def on_subtr(self, event):
+        x = self.list.GetSelectedItemCount()
+        
+        if x == 2:
+            i = self.list.GetFirstSelected()
+            j = self.list.GetNextSelected(i)
+            stepOK = (self.step[i] - self.step[j] < 1e-7)
+            firstOK = (self.first[i] == self.first[j])
+            rangeOK = (self.range[i] == self.range[j])
+        
+        if x == 2 and stepOK and firstOK and rangeOK:
+            filename = self.filename[i] + ' + ' + self.filename[j]
+            time = self.time[i] + self.time[j]
+            data = 1.0 * self.data[i]
+            data[:,1] = self.data[i][:,1] - self.data[j][:,1]
+            self.add_scan(1, filename, self.date[i], filename, self.wavelength[i], self.radius[i], self.omega[i], self.twotheta[i], self.scantype[i], self.scanaxis[i], self.first[i], self.range[i], self.step[i], time, self.points[i], data)
+            
+        elif x < 2 or x > 2:
+            wx.MessageBox('Bitte genau zwei Dateien in der Liste markieren!', 'Fehler', style=wx.ICON_ERROR)
+            
+        else:
+            wx.MessageBox(u'Dateien müssen gleichen Messbereich und gleiche Schrittweite besitzen!', 'Fehler', style=wx.ICON_ERROR)
             
     def on_correct(self, event):
         x = self.list.GetSelectedItemCount()
@@ -1292,6 +1323,13 @@ class MainFrame(wx.Frame):
                     
                     data = vstack((float_(angle), float_(intens))).T
                     
+                    try:
+                        wavelength = root.find('.//WaveLengthAverage').get('Value')
+                        radius = float(root.find('.//SecondaryTracks').find('.//Radius').get('Value'))
+                    except:
+                        wavelength = '???'
+                        radius = 100.0
+                    
                     scantype = z.split('ScanName="')[1].split('"')[0]
                     scanaxis = z.split('AxisName="')[1].split('"')[0]
                     first = float(z.split('<Start>')[1].split('</Start>')[0])
@@ -1300,7 +1338,7 @@ class MainFrame(wx.Frame):
                     time = float(z.split('MeasuredTimePerStep="')[1].split('"')[0])
                     points = float(z.split('<MeasurementPoints>')[1].split('</MeasurementPoints>')[0])
                     
-                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), stype=scantype, saxis=scanaxis, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
+                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), wl=wavelength, rad=radius, stype=scantype, saxis=scanaxis, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
                 
                 elif ext == 'udf':
                     f = open(path, 'r')
@@ -1656,7 +1694,7 @@ class MainFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.7.3 - 23.11.2015
+        Version 0.7.4 - 04.10.2016
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
