@@ -1,3 +1,11 @@
+In version 0.8.1 following improvements were implemented:
+- Tested on Python 3.8 and wxPython 4.1, i.e. support of Python 2.7 has been dropped.
+- Autozoom has been removed after activationg grid or legend, changing color or activating scans in the list.
+- Known bugs: Zoom using mousewheel does not work. Automatic tight layout of figure fails sometimes.
+
+In version 0.7.5 following improvements were implemented:
+- File choices in open window have been updated with *.xy and *.csv.
+
 In version 0.7.4 following improvements were implemented:
 - Subtracting of data with same scan range and step size (new button).
 - Sample displacement formula changed to 2theta = 2theta_data - 2 * displacement / radius * cos(2theta_data / 2) + xshift.

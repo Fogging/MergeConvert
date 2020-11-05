@@ -1,24 +1,25 @@
 ﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright 2015 by Hartmut Stoecker
+# Copyright 2020 by Hartmut Stoecker
 # Contact: hartmut.stoecker@physik.tu-freiberg.de
 #
 # MergeConvert provides a graphical user interface to display X-ray diffraction data and some special tools for X-ray reflectivity measurements.
 #
-# The present version is 0.7.4.
+# The present version is 0.8.1, tested on Python 3.8 and wxPython 4.1.
 
-import os, wx, codecs
+import wx, codecs
 import xml.etree.ElementTree as ET
-from wx.lib.mixins.listctrl import CheckListCtrlMixin
 
 import matplotlib
 matplotlib.use('WXAgg')
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigCanvas
-    
+from matplotlib.figure import Figure
+from matplotlib.font_manager import FontProperties
+from matplotlib.patches import Rectangle
+ 
 from pylab import append, arange, argwhere, array, cos, exp, float_, int32, float32, float64, fromfile, linspace, loadtxt, log, mod, ones, pi, savetxt, sin, sum, vstack, zeros
-from StringIO import StringIO
+from os.path import splitext, getmtime
 from time import gmtime, strftime
 from scipy.optimize import leastsq
 from copy import deepcopy
@@ -27,12 +28,6 @@ from zlib import decompress, MAX_WBITS
 from zipfile import ZipFile
 
 
-class CheckListCtrl(wx.ListCtrl, CheckListCtrlMixin):
-    def __init__(self, parent):
-        wx.ListCtrl.__init__(self, parent, -1, style=wx.LC_REPORT)
-        CheckListCtrlMixin.__init__(self)
-
-        
 class MergeWindow(wx.Dialog):
     """ Dialog to select merge parameters. """
 
@@ -220,7 +215,7 @@ class MergeWindow(wx.Dialog):
         i = len(app.frame.name) - 1
         
         app.frame.filename[i] = self.name.GetValue()
-        app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
+        app.frame.name[i] = splitext(self.name.GetValue())[0]
         app.frame.comment[i] = app.frame.filename[self.a] + ' + ' + app.frame.filename[self.b] + ' (scaled to ' + str(self.value) + ')'
         app.frame.date[i] = strftime("%d-%b-%Y, %H:%M:%S")
         app.frame.first[i] = self.angle[0]
@@ -278,7 +273,7 @@ class CorrectWindow(wx.Dialog):
         self.redrawbutton = wx.Button(self.panel, -1, "Neu zeichnen")
         self.Bind(wx.EVT_BUTTON, self.do_correct, self.redrawbutton)
         
-        nametext = os.path.splitext(app.frame.filename[self.a])[0] + '_corr' + os.path.splitext(app.frame.filename[self.a])[1]
+        nametext = splitext(app.frame.filename[self.a])[0] + '_corr' + splitext(app.frame.filename[self.a])[1]
         self.namelabel = wx.StaticText(self.panel, -1, "Name:")
         self.name = wx.TextCtrl(self.panel, -1, nametext, style=wx.TE_PROCESS_ENTER, size=(260, 20))
         self.name.Bind(wx.EVT_TEXT_ENTER, self.do_correct)
@@ -376,7 +371,7 @@ class CorrectWindow(wx.Dialog):
         i = len(app.frame.name) - 1
         
         app.frame.filename[i] = self.name.GetValue()
-        app.frame.name[i] = os.path.splitext(self.name.GetValue())[0]
+        app.frame.name[i] = splitext(self.name.GetValue())[0]
         app.frame.comment[i] = app.frame.filename[self.a] + ' - Corrected using beam size ' + str(self.beamsize) + ' mm and sample size ' + str(self.samplesize) + ' mm'
         app.frame.date[i] = strftime("%d-%b-%Y, %H:%M:%S")
         app.frame.data[i] = vstack((self.angle, self.res)).T
@@ -439,7 +434,7 @@ class ScaleWindow(wx.Dialog):
         hbox1.Add(t5, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
         hbox1.Add(t6, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
         
-        bsizer.Add(hbox1, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        bsizer.Add(hbox1, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL)
         
         for i in self.selected:
             name = wx.StaticText(self, -1, app.frame.filename[i] + ':', size=(370,-1))
@@ -463,7 +458,7 @@ class ScaleWindow(wx.Dialog):
             hbox1.Add(t_displace, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
             hbox1.Add(t_radius, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
             
-            bsizer.Add(hbox1, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+            bsizer.Add(hbox1, 0, border=3, flag = wx.ALIGN_LEFT | wx.ALL)
         
         bsizer.AddSpacer(5)
 
@@ -571,7 +566,6 @@ class MainFrame(wx.Frame):
         
         self.savename = 'Plot'
         self.checked = []
-        self.redraw = 1
         self.lastcolor = 0
         self.dblclick = 0
         self.press = None
@@ -642,21 +636,19 @@ class MainFrame(wx.Frame):
         self.spWindow.SetMinimumPaneSize(100)
         self.spWindow.SplitHorizontally(self.panel, self.graphpanel, 150)
         
-        # Create the mpl Figure and FigCanvas objects: 9x6 inches, 100 dots-per-inch
+        # Create the mpl Figure and FigCanvas objects
         self.dpi = 100
-        self.fig = Figure((10, 6), dpi=self.dpi)
+        self.fig = Figure((10, 5), dpi=self.dpi)
+        self.fig.set_tight_layout(True)
         self.canvas = FigCanvas(self.graphpanel, -1, self.fig)
         self.canvas.mpl_connect('button_press_event', self.on_Press)
         self.canvas.mpl_connect('motion_notify_event', self.on_Motion)
         self.canvas.mpl_connect('button_release_event', self.on_Release)
-        self.canvas.mpl_connect('resize_event', self.on_Resize)
         self.canvas.mpl_connect('scroll_event', self.on_Scroll)
         
         self.vbox_g = wx.BoxSizer(wx.VERTICAL)
-        self.vbox_g.Add(self.canvas, 1, wx.EXPAND)        
-        
+        self.vbox_g.Add(self.canvas, 1, wx.EXPAND)
         self.graphpanel.SetSizer(self.vbox_g)
-        self.vbox_g.Fit(self)
         
         # Create the top panel
         self.loadbutton = wx.Button(self.panel, wx.ID_OPEN, "Datei\nladen", size=(70,35))
@@ -697,22 +689,25 @@ class MainFrame(wx.Frame):
         
         self.cb_cps = wx.CheckBox(self.panel, -1, "Counts pro Sekunde", style=wx.ALIGN_LEFT)
         self.cb_cps.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_cps)
+        self.Bind(wx.EVT_CHECKBOX, self.draw_figure, self.cb_cps)
         
         self.cb_log = wx.CheckBox(self.panel, -1, "y logarithmisch", style=wx.ALIGN_LEFT)
         self.cb_log.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_log)
+        self.Bind(wx.EVT_CHECKBOX, self.draw_figure, self.cb_log)
         
-        self.cb_grid = wx.CheckBox(self.panel, -1, "Gitternetz anzeigen", style=wx.ALIGN_LEFT)
+        self.cb_grid = wx.CheckBox(self.panel, 101, "Gitternetz anzeigen", style=wx.ALIGN_LEFT)
         self.cb_grid.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_grid)
+        self.Bind(wx.EVT_CHECKBOX, self.draw_figure, self.cb_grid)
         
-        self.cb_legend = wx.CheckBox(self.panel, -1, "Legende anzeigen", style=wx.ALIGN_LEFT)
+        self.cb_legend = wx.CheckBox(self.panel, 102, "Legende anzeigen", style=wx.ALIGN_LEFT)
         self.cb_legend.SetValue(1)
-        self.Bind(wx.EVT_CHECKBOX, self.on_cb, self.cb_legend)
+        self.Bind(wx.EVT_CHECKBOX, self.draw_figure, self.cb_legend)
         
-        self.list = CheckListCtrl(self.panel)
-        self.list.OnCheckItem = self.on_CheckItem
+        self.list = wx.ListCtrl(self.panel, 103, style=wx.LC_REPORT)
+        self.list.EnableCheckBoxes(True)
+        self.Bind(wx.EVT_LIST_ITEM_CHECKED, self.draw_figure, self.list)
+        self.Bind(wx.EVT_LIST_ITEM_UNCHECKED, self.draw_figure, self.list)
+        
         self.list.InsertColumn(0, "Dateiname", width=240)
         self.list.InsertColumn(1, "Startwinkel", width=70)
         self.list.InsertColumn(2, "Endwinkel", width=70)
@@ -723,7 +718,7 @@ class MainFrame(wx.Frame):
         self.list.InsertColumn(7, "Skalierung", width=120)
         
         # Layout with box sizers
-        flags = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL
+        flags = wx.ALIGN_LEFT | wx.ALL
         
         self.vbox1 = wx.BoxSizer(wx.VERTICAL)
         self.vbox1.Add(self.cb_cps, 0, border=3, flag=flags)
@@ -732,6 +727,8 @@ class MainFrame(wx.Frame):
         self.vbox2 = wx.BoxSizer(wx.VERTICAL)
         self.vbox2.Add(self.cb_grid, 0, border=3, flag=flags)
         self.vbox2.Add(self.cb_legend, 0, border=3, flag=flags)
+ 
+        flags = wx.ALIGN_LEFT | wx.ALL | wx.ALIGN_CENTER_VERTICAL
  
         self.hbox = wx.BoxSizer(wx.HORIZONTAL)
         self.hbox.Add(self.loadbutton, 0, border=3, flag=flags)
@@ -752,15 +749,29 @@ class MainFrame(wx.Frame):
         self.vbox.Add(self.list, 1, border=3, flag = wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND)   
         
         self.panel.SetSizer(self.vbox)
-        self.vbox.Fit(self.panel)
+        
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(self.spWindow, 1, wx.EXPAND)
+        self.SetSizer(self.sizer)
+        self.sizer.Fit(self)
     
     def create_status_bar(self):
         self.statusbar = self.CreateStatusBar()
         self.statusbar.SetFieldsCount(3)
         self.statusbar.SetStatusWidths([-1,100,110])
 
-    def draw_figure(self):
+    def draw_figure(self, event=''):
         """ Redraws the figure. """
+        try:
+            if event.GetId() == 101 or event.GetId() == 102 or event.GetId() == 103:
+                event = 'keep'
+        except:
+            None
+        
+        if event == 'keep':
+            xl, xm = self.axes.get_xlim()
+            yl, ym = self.axes.get_ylim()
+        
         self.fig.clear()
         
         self.axes = self.fig.add_subplot(111)
@@ -769,8 +780,9 @@ class MainFrame(wx.Frame):
         
         checked = 0
         for i in arange(len(self.filename)):
-            if self.list.IsChecked(i):
+            if self.list.IsItemChecked(i):
                 checked += 1
+                self.checked[i] = 1
                 angle = self.data[i][:,0] - 360 / pi * self.displace[i] / self.radius[i] * cos(self.data[i][:,0] * pi / 360) + self.xshift[i]
                 intensity = self.data[i][:,1] * self.scale[i] + self.yshift[i]
 
@@ -781,12 +793,14 @@ class MainFrame(wx.Frame):
                     self.axes.vlines(angle, [0.1], intensity, color=self.color[i])
                 else:
                     self.axes.plot(angle, intensity, label=self.filename[i], color=self.color[i])
-        
+            else:
+                self.checked[i] = 0
+                
         if self.cb_log.IsChecked() and self.data != []:
             self.axes.set_yscale('log')
         
         if self.cb_legend.IsChecked() and checked > 0:
-            prop = matplotlib.font_manager.FontProperties(size=8) 
+            prop = FontProperties(size=8) 
             self.axes.legend(loc=0, prop=prop)
         
         self.axes.tick_params(axis='both', labelsize=8)
@@ -797,7 +811,10 @@ class MainFrame(wx.Frame):
         else:
             self.axes.set_ylabel(u'Intensität (counts)', fontsize=10)
         
-        self.on_Resize('')
+        if event == 'keep':
+            self.axes.set_xlim(xl, xm)
+            self.axes.set_ylim(yl, ym)
+            
         self.canvas.draw()
         
     def on_Scroll(self, event):
@@ -805,6 +822,12 @@ class MainFrame(wx.Frame):
         xl, xm = self.axes.get_xlim()
         yl, ym = self.axes.get_ylim()
         factor = 1 - event.step / 20.0
+        # print(x, y, xl, xm, yl, ym, event.step, event.button)
+        
+        if type(x) != 'float' or type(y) == 'float':
+            x = (xl + xm) / 2
+            y = (yl + ym) / 2
+            factor = 0.7
         
         if not 'shift' in str(event.key):
             xln = x - factor * (x - xl)
@@ -833,7 +856,7 @@ class MainFrame(wx.Frame):
                 
         if event.button == 1 and event.inaxes == self.axes:
             self.press = event.xdata, event.ydata
-            self.rectangle = matplotlib.patches.Rectangle((event.xdata, event.ydata), 0, 0, facecolor="grey", alpha=0.25)
+            self.rectangle = Rectangle((event.xdata, event.ydata), 0, 0, facecolor="grey", alpha=0.25)
             self.axes.add_patch(self.rectangle)
             
         if event.button == 3 and event.inaxes == self.axes:
@@ -899,35 +922,22 @@ class MainFrame(wx.Frame):
             self.press = None
             self.canvas.draw()
             
-    def on_Resize(self, event):
-        try:
-            # self.fig.tight_layout(pad=1.0)
-            x, y = self.fig.get_size_inches()
-            self.fig.subplots_adjust(left=0.8/x, right=1-0.2/x, bottom=0.4/y, top=1-0.15/y)
-        except Exception as error:
-            return
-    
-    def on_CheckItem(self, index, flag):
-        if self.list.IsChecked(index):
-            self.checked[index] = 1
-        else:
-            self.checked[index] = 0
-        if self.redraw:
-            self.draw_figure()
-        
     def update_list(self):
         self.list.DeleteAllItems()
         self.scaling = []
+        
+        self.Unbind(wx.EVT_LIST_ITEM_CHECKED, self.list)
+        self.Unbind(wx.EVT_LIST_ITEM_UNCHECKED, self.list)
     
         for i in arange(len(self.filename)):
-            self.list.InsertStringItem(i, self.filename[i])
-            self.list.SetStringItem(i, 1, str(self.first[i]))
-            self.list.SetStringItem(i, 2, str(self.range[i]+self.first[i]))
-            self.list.SetStringItem(i, 3, str(self.step[i]))
-            self.list.SetStringItem(i, 4, str(self.time[i]))
-            self.list.SetStringItem(i, 5, self.date[i])
-            self.list.SetStringItem(i, 6, self.comment[i])
-            self.list.SetItemTextColour(i, wx.Colour(255*self.color[i][0], 255*self.color[i][1], 255*self.color[i][2]))
+            self.list.InsertItem(i, self.filename[i])
+            self.list.SetItem(i, 1, str(self.first[i]))
+            self.list.SetItem(i, 2, str(self.range[i]+self.first[i]))
+            self.list.SetItem(i, 3, str(self.step[i]))
+            self.list.SetItem(i, 4, str(self.time[i]))
+            self.list.SetItem(i, 5, self.date[i])
+            self.list.SetItem(i, 6, self.comment[i])
+            self.list.SetItemTextColour(i, wx.Colour(int(255*self.color[i][0]), int(255*self.color[i][1]), int(255*self.color[i][2])))
             
             scalecomment = ''
             if self.xshift[i] != 0:
@@ -941,18 +951,18 @@ class MainFrame(wx.Frame):
             if self.displace[i] != 0:
                 if scalecomment != '': scalecomment += ', '
                 scalecomment += 'height error %s mm (radius %s mm)' %(self.displace[i], self.radius[i])
-            self.list.SetStringItem(i, 7, scalecomment)
+            self.list.SetItem(i, 7, scalecomment)
             self.scaling.append(scalecomment)
-        
-        self.redraw = 0
-        for i in arange(len(self.filename)):
+            
+            
             if self.checked[i] == 1:
-                self.list.CheckItem(i)
-        self.redraw = 1
+                self.list.CheckItem(i, True)
+            else:
+                self.list.CheckItem(i, False)
+                
+        self.Bind(wx.EVT_LIST_ITEM_CHECKED, self.draw_figure, self.list)
+        self.Bind(wx.EVT_LIST_ITEM_UNCHECKED, self.draw_figure, self.list)
     
-    def on_cb(self, event):
-        self.draw_figure()
-   
     def on_color(self, event):
         if self.list.GetSelectedItemCount() == 1:
             i = self.list.GetFirstSelected()
@@ -964,13 +974,13 @@ class MainFrame(wx.Frame):
             data.SetCustomColour(2, (178, 0, 38))
             data.SetCustomColour(3, (78, 188, 206))
             data.SetCustomColour(4, (230, 110, 1))
-            data.SetColour(wx.Colour(self.color[i][0]*255, self.color[i][1]*255, self.color[i][2]*255))
+            data.SetColour(wx.Colour(int(self.color[i][0]*255), int(self.color[i][1]*255), int(self.color[i][2]*255)))
             dlg = wx.ColourDialog(self, data)
            
             if dlg.ShowModal() == wx.ID_OK:
                 res = dlg.GetColourData().Colour
                 self.color[i] = (res[0]/255.0, res[1]/255.0, res[2]/255.0)
-                self.draw_figure()
+                self.draw_figure('keep')
                 self.update_list()
                 
         else:
@@ -1077,7 +1087,7 @@ class MainFrame(wx.Frame):
                 if self.list.IsSelected(i):
                     self.remove_file(i)
             self.update_list()
-            self.draw_figure()
+            self.draw_figure('keep')
             
     def remove_file(self, i):
         del self.filename[i]
@@ -1105,8 +1115,8 @@ class MainFrame(wx.Frame):
         del self.checked[i]
         
     def on_open_file(self, event):
-        file_choices = "Daten-Typen (*.raw, *.brml, *.udf, *.x00, *.njc, *.val, *.dat, *.txt)|*.raw;*.brml;*.udf;*.x00;*.njc;*.val;*.dat;*.txt|Bruker RAW Version 3 (*.raw)|*.raw|Bruker BRML (*.brml)|*.brml|Philips (*.udf)|*.udf|Philips (*.x00)|*.x00|Seifert (*.njc)|*.njc|Seifert (*.val)|*.val|DAT-Datei (*.dat)|*.dat|TXT-Datei (*.txt)|*.txt|ICSD Powder Pattern Table (*.txt)|*.txt|Alle Dateien (*.*)|*.*"
-        dlg = wx.FileDialog(self, "Datei laden", "", "", file_choices, wx.OPEN|wx.MULTIPLE)
+        file_choices = "Daten-Typen|*.raw;*.brml;*.udf;*.x00;*.njc;*.val;*.csv;*.dat;*.txt;*.xy|Bruker RAW Version 3 (*.raw)|*.raw|Bruker BRML (*.brml)|*.brml|Philips (*.udf)|*.udf|Philips (*.x00)|*.x00|Seifert (*.njc)|*.njc|Seifert (*.val)|*.val|Text-Datei (*.dat, *.txt, *.xy)|*.dat;*.txt;*.xy|ICSD Powder Pattern Table (*.csv, *.txt)|*.csv;*.txt|Alle Dateien (*.*)|*.*"
+        dlg = wx.FileDialog(self, "Datei laden", "", "", file_choices, wx.FD_OPEN|wx.FD_MULTIPLE)
         
         if dlg.ShowModal() == wx.ID_OK:
             filenames = dlg.GetFilenames()
@@ -1115,7 +1125,7 @@ class MainFrame(wx.Frame):
             for i in arange(len(paths)):
                 filename = filenames[i]
                 path = paths[i]
-                ext = os.path.splitext(filename)[-1].lstrip('.').lower()
+                ext = splitext(filename)[-1].lstrip('.').lower()
                 
                 if ext == 'njc':
                     fd = open(path, 'rb')
@@ -1159,7 +1169,7 @@ class MainFrame(wx.Frame):
                     intens = data32[-40-points:-40] * time
                     data = vstack((angle, intens)).T
                     
-                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), comm=comment, wl=wavelength, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
+                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(getmtime(path))), comm=comment, wl=wavelength, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
                     
                 elif ext == 'raw':
                     fd = open(path, 'rb')
@@ -1300,22 +1310,21 @@ class MainFrame(wx.Frame):
                     x = f.read(5)
                     f.close()
                     
-                    if x[:4] == u'PK\x03\x04':
-                        z = ZipFile(path).read('Experiment0/RawData0.xml')
+                    if x[:4] == b'PK\x03\x04':
+                        z = ZipFile(path).read('Experiment0/RawData0.xml').decode('UTF-8')
                     
                     elif x[:5] == '<?xml':
                         root = ET.parse(path).getroot()
                         for containers in root.iter('Containers'):
                             if containers.find('TypeDesc').text == 'BrukerAXS.Common.ExperimentV5.Experiment.Data.DataContainer':
                                 y = b64decode(containers.find('SerializedObject').text)
-                                z = decompress(y, MAX_WBITS|16)
+                                z = decompress(y, MAX_WBITS|16).decode('UTF-8')
                                 break
-                    
+                                               
                     angle = []
                     intens = []
                     
-                    zz = unicode(z, errors='ignore').encode('utf16')
-                    root = ET.fromstring(zz)
+                    root = ET.fromstring(z)
                     for datum in root.iter('Datum'):
                         values = datum.text.split(',')
                         angle.append(values[2])
@@ -1338,7 +1347,7 @@ class MainFrame(wx.Frame):
                     time = float(z.split('MeasuredTimePerStep="')[1].split('"')[0])
                     points = float(z.split('<MeasurementPoints>')[1].split('</MeasurementPoints>')[0])
                     
-                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), wl=wavelength, rad=radius, stype=scantype, saxis=scanaxis, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
+                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(getmtime(path))), wl=wavelength, rad=radius, stype=scantype, saxis=scanaxis, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
                 
                 elif ext == 'udf':
                     f = open(path, 'r')
@@ -1420,7 +1429,7 @@ class MainFrame(wx.Frame):
                     angle = linspace(first, stop, points)
                     data = vstack((angle, Intensity * time)).T
                     
-                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), comm=comment, om=omega, tt=twotheta, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
+                    self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(getmtime(path))), comm=comment, om=omega, tt=twotheta, fst=first, rng=range, stp=step, t=time, pts=points, d=data)
                     
                 elif ext == 'x00':
                     f = open(path, 'r')
@@ -1522,7 +1531,7 @@ class MainFrame(wx.Frame):
                         try:
                             self.add_scan(1, filename, date, comment, wavelength, radius, omega, twotheta, scantype, scanaxis, first, range, step, time, points, data)
                         except:
-                            self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(os.path.getmtime(path))), fst=first, rng=range, stp=step, t=time, pts=points, d=data)
+                            self.add_scan(numberofscans=1, fname=filename, dat=strftime("%d-%b-%Y, %H:%M:%S", gmtime(getmtime(path))), fst=first, rng=range, stp=step, t=time, pts=points, d=data)
                             
                     except Exception as error:
                         wx.MessageBox('Beim Laden der Datei:\n\n' + path + '\n\ntrat folgender Fehler auf:\n\n' + str(error), 'Fehler beim Laden der Datei', style=wx.ICON_ERROR)
@@ -1548,7 +1557,7 @@ class MainFrame(wx.Frame):
                 d[:,1] = sumdata[:,1]
                 
         if numberofscans > 0:
-            name = os.path.splitext(fname)[0]
+            name = splitext(fname)[0]
             
             if numberofscans == 1:
                 self.filename.append(fname)
@@ -1619,7 +1628,7 @@ class MainFrame(wx.Frame):
         
         if dlg.ShowModal() == wx.ID_OK:
             path = dlg.GetPath()
-            self.savename = os.path.splitext(dlg.GetFilename())[0]
+            self.savename = splitext(dlg.GetFilename())[0]
             self.canvas.print_figure(path, dpi=3*self.dpi)
             self.flash_status_message("Grafik gespeichert unter %s" % path)
         
@@ -1637,8 +1646,8 @@ class MainFrame(wx.Frame):
             if dlg.ShowModal() == wx.ID_OK:
                 path = dlg.GetPath()
                 filename = dlg.GetFilename()
-                self.savename = os.path.splitext(filename)[0]
-                ext = os.path.splitext(filename)[-1].lstrip('.').lower()
+                self.savename = splitext(filename)[0]
+                ext = splitext(filename)[-1].lstrip('.').lower()
                 f = open(path, 'w')
                 
                 if ext == 'txt':
@@ -1694,7 +1703,7 @@ class MainFrame(wx.Frame):
             
         (basiert auf wxPython und matplotlib)
         
-        Version 0.7.4 - 04.10.2016
+        Version 0.8.1 - 05.11.2020
         """
         dlg = wx.MessageDialog(self, msg, "About", wx.OK)
         dlg.ShowModal()
@@ -1714,7 +1723,7 @@ class MainFrame(wx.Frame):
         
         
 if __name__ == '__main__':
-    app = wx.PySimpleApp(redirect=True)
+    app = wx.App(redirect=True)
     app.frame = MainFrame()
     app.frame.Show()
     app.MainLoop()
